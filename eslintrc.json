@@ -1,0 +1,23 @@
+{
+  "rules": {
+    "no-console": "warn",
+    "vue/component-tags-order": [
+      "error",
+      {
+        "order": [["template", "script"], "style"]
+      }
+    ],
+    "vue/valid-attribute-name": "off",
+    "vue/no-unused-refs": "off",
+    "vue/prop-name-casing": "off",
+    "@typescript-eslint/brace-style": [
+      "error",
+      "1tbs",
+      { "allowSingleLine": true }
+    ],
+    "curly": ["error", "multi-line"],
+    "antfu/if-newline": "off"
+  },
+  "ignorePatterns": ["db.json"],
+  "extends": ["@antfu", "@unocss/eslint-config"]
+}
