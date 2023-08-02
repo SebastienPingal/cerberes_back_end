@@ -43,6 +43,6 @@ jobs:
             cd Documents/PROG/basic_rest_api/
             tar -xzvf package.tar.gz
             npm install
-            npm start
+            screen -dmS myserver npm start
         env:
           PRISMA_ENGINES_CHECKSUM_IGNORE_MISSING: 1
