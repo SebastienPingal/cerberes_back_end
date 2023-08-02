@@ -40,6 +40,7 @@ jobs:
           password: ${{ secrets.RASPI_SSH_KEY }}
           port: ${{ secrets.RASPI_SSH_PORT }}
           script: |
+            set -e
             cd Documents/PROG/cerberes/back_end
             tar -xzvf package.tar.gz
             npm install
