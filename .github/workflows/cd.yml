@@ -42,6 +42,7 @@ jobs:
           script: |
             set -e
             cd Documents/PROG/cerberes/back_end
+            tar -xzvf package.tar.gz
             npm install
             screen -dmS myserver npm start
         env:
