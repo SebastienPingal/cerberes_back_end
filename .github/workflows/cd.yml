@@ -30,7 +30,7 @@ jobs:
           password: ${{ secrets.RASPI_SSH_KEY }}
           port: ${{ secrets.RASPI_SSH_PORT }}
           source: "package.tar.gz"
-          target: "Documents/cerberes/back_end"
+          target: "Documents/PROG/cerberes/back_end"
 
       - name: Unpack files on server and run it
         uses: appleboy/ssh-action@master
