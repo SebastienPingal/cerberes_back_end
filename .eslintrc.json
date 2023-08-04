@@ -18,6 +18,5 @@
     "curly": ["error", "multi-line"],
     "antfu/if-newline": "off"
   },
-  "ignorePatterns": ["db.json"],
   "extends": ["@antfu", "@unocss/eslint-config"]
 }
