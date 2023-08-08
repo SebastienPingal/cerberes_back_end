@@ -1,6 +1,6 @@
 import { Strategy as JwtStrategy, ExtractJwt } from 'passport-jwt'
 import passport from 'passport'
-// import user from '../models/user'
+import user from '../entities/users/users.model'
 
 const options = {
   jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
@@ -11,7 +11,7 @@ const my_passport = passport.use(
   new JwtStrategy(options, async (payload, done) => {
     try {
       if (!payload.id) throw new Error()
-    //   const this_user = await user.get_user(payload.id)
+      const this_user = await user.get_user(payload.id)
     //   done(null, this_user)
     } catch (error) {
       done(null, false)

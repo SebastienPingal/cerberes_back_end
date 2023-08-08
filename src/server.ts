@@ -1,6 +1,7 @@
 import express from 'express'
 import { testConnection, sequelize } from './utils/sequelize.client'
 import { User, Contact, Conversation, UserConversation, Message } from '../sequelize/sequelize.models'
+import users_router from './entities/users/users.router'
 
 const app = express()
 
@@ -12,6 +13,8 @@ app.listen(port, () => {
   console.log(`Server is running on port ${port}`)
 })
 
+app.use('/users', users_router)
+
 // health check
 app.get('/', (req, res) => {
   res.send('OK')
@@ -21,23 +24,6 @@ app.get('/', (req, res) => {
 app.get('/testDB', async (req, res) => {
   try {
     await testConnection()
-    res.send('OK')
-  } catch (error) {
-    const typedError = error as Error
-    res.status(500)
-    res.send(typedError.message)
-  }
-})
-
-// database sync models
-app.get('/syncDB', async (req, res) => {
-  try {
-    await User.sync({ force: true })
-    await Contact.sync({ force: true })
-    await Conversation.sync({ force: true })
-    await UserConversation.sync({ force: true })
-    await Message.sync({ force: true })
-
     res.send('OK')
   } catch (error) {
     const typedError = error as Error

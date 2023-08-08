@@ -1,10 +1,11 @@
-import { sequelize } from '../../utils/sequelize.client'
+import { User } from '../../../sequelize/sequelize.models'
 import { IUserCreation } from '../../types'
 
 export default class user {
-    static async create(user: IUserCreation) {
+    static async create_one(user: IUserCreation) {
         try {
-            return await sequelize.models.User.create(user)
+            console.log('user', user)
+            return await User.create(user)
         } catch (error) {
             throw new Error('Unable to create user')
         }
@@ -12,7 +13,7 @@ export default class user {
 
     static async find_one_by_uuid(uuid: string) {
         try {
-            return await sequelize.models.User.findOne({ where: { User_contact_uuid: uuid } })
+            return await User.findOne({ where: { User_contact_uuid: uuid } })
         } catch (error) {
             throw new Error('Unable to find user')
         }
@@ -20,7 +21,7 @@ export default class user {
 
     static async find_one_by_id(id: number) {
         try {
-            return await sequelize.models.User.findOne({ where: { User_id: id } })
+            return await User.findOne({ where: { User_id: id } })
         } catch (error) {
             throw new Error('Unable to find user')
         }
@@ -28,7 +29,7 @@ export default class user {
 
     static async delete_one_by_id(id: number) {
         try {
-            return await sequelize.models.User.destroy({ where: { User_id: id } })
+            return await User.destroy({ where: { User_id: id } })
         } catch (error) {
             throw new Error('Unable to delete user')
         }
