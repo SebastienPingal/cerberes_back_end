@@ -27,6 +27,15 @@ export default class user {
         }
     }
 
+    static async check_if_name_is_used(name: string) {
+        // throw error if name already exists
+        const existing_user = await User.findOne({ where: { User_name: name } })
+        if (existing_user) {
+            throw new Error('User already exists')
+        }
+        return
+    }
+
     static async delete_one_by_id(id: number) {
         try {
             return await User.destroy({ where: { User_id: id } })
@@ -34,4 +43,5 @@ export default class user {
             throw new Error('Unable to delete user')
         }
     }
+
 }

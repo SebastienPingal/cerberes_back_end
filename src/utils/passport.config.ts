@@ -11,8 +11,8 @@ const my_passport = passport.use(
   new JwtStrategy(options, async (payload, done) => {
     try {
       if (!payload.id) throw new Error()
-      const this_user = await user.get_user(payload.id)
-    //   done(null, this_user)
+      const this_user = await user.find_one_by_id(payload.id)
+      done(null, this_user)
     } catch (error) {
       done(null, false)
     }
