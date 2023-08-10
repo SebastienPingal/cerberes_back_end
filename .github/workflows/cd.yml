@@ -43,7 +43,5 @@ jobs:
             set -e
             cd Documents/PROG/cerberes/back_end
             tar -xzvf package.tar.gz
-            npm install
-            screen -dmS myserver npm start
         env:
           PRISMA_ENGINES_CHECKSUM_IGNORE_MISSING: 1
