@@ -1,7 +1,7 @@
 import jwt from 'jsonwebtoken'
 import { IUser } from '../../types'
 
-export default class users_helper {
+export default class auth_helper {
     static generate_uuid() {
         return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
             const r = Math.random() * 16 | 0
@@ -17,7 +17,7 @@ export default class users_helper {
             name: user.User_name,
             uuid: user.User_contact_uuid
         }
-        const token = jwt.sign(payload, JWT_secret, { expiresIn: '30d' })
+        const token = jwt.sign(payload, JWT_secret, { expiresIn: '1d' })
         return token
     }
 }

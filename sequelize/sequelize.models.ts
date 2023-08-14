@@ -1,5 +1,6 @@
 const { Sequelize, DataTypes } = require('sequelize');
-const sequelize = new Sequelize(process.env.DATABASE_URL);
+//initialize an instance of Sequelize with dialect postgres
+const sequelize = new Sequelize({dialect: 'postgres', dialectOptions: {ssl: true}, URL: process.env.DATABASE_URL});
 
 const User = sequelize.define('User', {
   User_id: {
@@ -8,6 +9,14 @@ const User = sequelize.define('User', {
     autoIncrement: true,
   },
   User_name: {
+    type: DataTypes.STRING,
+    allowNull: false,
+  },
+  User_password: {
+    type: DataTypes.STRING,
+    allowNull: false,
+  },
+  User_email: {
     type: DataTypes.STRING,
     allowNull: false,
   },

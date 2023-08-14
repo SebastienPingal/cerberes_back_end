@@ -27,11 +27,11 @@ export default class user {
         }
     }
 
-    static async check_if_name_is_used(name: string) {
-        // throw error if name already exists
-        const existing_user = await User.findOne({ where: { User_name: name } })
+    static async check_if_email_is_used(email: string) {
+        // throw error if email already exists
+        const existing_user = await User.findOne({ where: { User_email: email } })
         if (existing_user) {
-            throw new Error('User already exists')
+            throw new Error('Email already used')
         }
         return
     }
