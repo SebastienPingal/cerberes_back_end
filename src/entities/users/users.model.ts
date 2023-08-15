@@ -27,6 +27,14 @@ export default class user {
         }
     }
 
+    static async find_one_by_email(email: string) {
+        try {
+            return await User.findOne({ where: { User_email: email } })
+        } catch (error) {
+            throw new Error('Unable to find user')
+        }
+    }
+
     static async check_if_email_is_used(email: string) {
         // throw error if email already exists
         const existing_user = await User.findOne({ where: { User_email: email } })
