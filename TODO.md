@@ -2,9 +2,15 @@
 
 ### /auth
 
-    * GET /login
-    * POST /register
+[x] GET /login
+[x] POST /register
 
 ### /users
 
-    * GET /me/:id
+[_] GET /me/:id
+
+## Passport
+
+create strategy :
+    handle password
+
