@@ -11,7 +11,7 @@ export default class users_helper {
     }
 
     static generate_JWT(user: IUser) {
-        const JWT_secret = process.env.JWT_SECRET ?? 'secret'
+        const JWT_secret = process.env.JWT_SECRET ?? 'mysecret869'
         const payload = {
             id: user.User_id,
             name: user.User_name,
