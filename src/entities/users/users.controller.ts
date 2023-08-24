@@ -8,7 +8,7 @@ export default class user_controller {
         try {
             const this_user = req.user as IUser
             if (!this_user) throw new Error('User is required')
-            
+            console.log('this_user', this_user)
             res.status(200)
             res.send(this_user)
         } catch (error) {
@@ -17,4 +17,5 @@ export default class user_controller {
             res.send(typedError.message)
         }
     }
+
 }
