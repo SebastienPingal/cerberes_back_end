@@ -28,6 +28,7 @@ router.get('/', (req, res) => {
 // test database connection
 router.get('/testDB', async (req, res) => {
   try {
+    console.log('testing db')
     await testConnection()
     res.send('OK')
   } catch (error) {

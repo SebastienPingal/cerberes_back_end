@@ -11,6 +11,8 @@ export interface IUser {
 
 export interface IUserCreation extends Optional<IUser, "User_id"> {}
 
+export interface IUserUpdate extends Partial<IUser> {}
+
 export interface IContact {
   Contact_id: number;
   User_id: number;

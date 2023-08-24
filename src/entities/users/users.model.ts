@@ -1,5 +1,5 @@
 import { User } from '../../../sequelize/sequelize.models'
-import { IUserCreation } from '../../types'
+import { IUserCreation, IUserUpdate } from '../../types'
 
 export default class user {
     static async create_one(user: IUserCreation) {
@@ -52,4 +52,20 @@ export default class user {
         }
     }
 
+    static async update_one_by_id(update: IUserUpdate) {
+        try {
+            const user_to_update = await User.findOne({ where: { User_id: update.User_id } })
+            if (!user_to_update) throw new Error('User not found')
+            const updated_user = { 
+                ...user_to_update,
+                ...update,
+                User_id: user_to_update.User_id,
+                User_password: user_to_update.User_password
+            }
+            await User.update(updated_user, { where: { User_id: update.User_id } })
+            return updated_user
+        } catch (error) {
+            throw new Error('Unable to update user')
+        }
+    }
 }
