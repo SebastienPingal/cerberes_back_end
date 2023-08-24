@@ -43,3 +43,4 @@ jobs:
             set -e
             cd Documents/PROG/cerberes/back_end
             tar -xzvf package.tar.gz
+            npm run intall
