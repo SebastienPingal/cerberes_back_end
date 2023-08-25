@@ -19,13 +19,15 @@ export default class user_controller {
 
     static async update_user(req: Request, res: Response) {
         try {
-            const this_user = req.user as IUserUpdate
-            if (!this_user) throw new Error('User is required')
-            const updated_user = await user.update_one_by_id(this_user)
+            const user_to_update = req.user as IUser
+            if (!user_to_update) throw new Error('User is required')
+            const update = req.body as IUserUpdate
+            const updated_user = await user.update_one_by_id(user_to_update, update)
             res.status(200)
             res.send(updated_user)
         } catch (error) {
             const typedError = error as Error
+            console.error
             res.status(500)
             res.send(typedError.message)
         }

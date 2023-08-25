@@ -58,17 +58,21 @@ export default class user {
           throw new Error('Invalid input');
         }
         const { User_id, User_password, ...fields_to_update } = update
+        
         await User.update(
           fields_to_update, 
           { where: { User_id: user_to_update.User_id } }
         )
-        let updated_user 
+
+        let updated_user = {} as IUser
         await User.findOne({ where: { User_id: user_to_update.User_id } })
           .then((response) => {
-            if (!response) throw new Error()
-            updated_user = response.dataValues
+            if (!response) throw new Error('Could not find user after update')
+            updated_user = response.dataValues as IUser
           })
+
         return updated_user
+
       } catch (error) {
         const typedError = error as Error
         console.error("Error updating user:", typedError.message);
