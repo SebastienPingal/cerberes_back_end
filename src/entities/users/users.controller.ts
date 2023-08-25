@@ -7,11 +7,11 @@ export default class user_controller {
         try {
             const this_user = req.user as IUser
             if (!this_user) throw new Error('User is required')
-            console.log('this_user', this_user)
             res.status(200)
             res.send(this_user)
         } catch (error) {
             const typedError = error as Error
+            console.error(typedError.message)
             res.status(500)
             res.send(typedError.message)
         }
@@ -22,12 +22,16 @@ export default class user_controller {
             const user_to_update = req.user as IUser
             if (!user_to_update) throw new Error('User is required')
             const update = req.body as IUserUpdate
-            const updated_user = await user.update_one_by_id(user_to_update, update)
+
+            const updated_user = await user.update_one_by_id(user_to_update, update) as IUser
+            if (!updated_user) throw new Error('Unable to update user')
+            delete updated_user.User_password
+
             res.status(200)
             res.send(updated_user)
         } catch (error) {
             const typedError = error as Error
-            console.error
+            console.error(typedError.message)
             res.status(500)
             res.send(typedError.message)
         }

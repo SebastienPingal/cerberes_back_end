@@ -1,24 +1,28 @@
 import { Router } from 'express'
-import authRoutes from './entities/auth/auth.router'
-import usersRoutes from './entities/users/users.router'
+import auth_Routes from './entities/auth/auth.router'
+import users_Routes from './entities/users/users.router'
+import contacts_Routes from './entities/contacts/contacts.router'
 import my_passport from './utils/passport.config'
 import { testConnection } from './utils/sequelize.client'
 import { User, Contact, Conversation, UserConversation, Message } from '../sequelize/sequelize.models'
 
 const router = Router()
+
+router.use(auth_Routes)
 router.use(
     '/users', 
-    (req, res, next) => {
-        console.log(req.headers);
-        next();
-    },
     my_passport.authenticate('jwt', { session: false }),
-    usersRoutes
+    users_Routes
 )
-router.use(authRoutes)
+router.use(
+    '/contacts', 
+    my_passport.authenticate('jwt', { session: false }),
+    contacts_Routes
+)
 
 
 // ___________________________________
+// # TODO - create a router for those routes
 
 // health check
 router.get('/', (req, res) => {
