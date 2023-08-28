@@ -6,9 +6,11 @@ import conversations_Routes from './entities/conversations/conversations.router'
 import my_passport from './utils/passport.config'
 import { testConnection } from './utils/sequelize.client'
 import { User, Contact, Conversation, UserConversation, Message } from '../sequelize/sequelize.models'
+import cors from 'cors'
 
 const router = Router()
 
+router.use(cors())
 router.use(auth_Routes)
 router.use(
   '/users',
@@ -23,7 +25,7 @@ router.use(
 router.use(
   '/conversations',
   my_passport.authenticate('jwt', { session: false }),
-  conversations_Routes
+    conversations_Routes
 )
 
 // ___________________________________
