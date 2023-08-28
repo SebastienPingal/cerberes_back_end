@@ -1,4 +1,4 @@
-import { DataTypes, Sequelize, Model } from 'sequelize';
+import { DataTypes, Sequelize, Model } from 'sequelize'
 import dotenv from 'dotenv'
 import {
   IUser,
@@ -7,23 +7,23 @@ import {
   IConversation,
   IUserConversation,
   IMessage,
-} from '../src/types';
+} from '../src/types'
 
 dotenv.config()
 
 if (!process.env.DATABASE_URL) {
-  throw new Error('Please define the DATABASE_URL environment variable inside .env');
+  throw new Error('Please define the DATABASE_URL environment variable inside .env')
 }
 
-const sequelize = new Sequelize(process.env.DATABASE_URL);
+const sequelize = new Sequelize(process.env.DATABASE_URL)
 
 class User extends Model<IUser, IUserCreation> implements IUser {
-  User_id!: number;
-  User_name!: string;
-  User_email!: string;
-  User_password!: string;
-  User_contact_uuid?: string;
-  PGP_PublicKey!: string;
+  User_id!: number
+  User_name!: string
+  User_email!: string
+  User_password!: string
+  User_contact_uuid?: string
+  PGP_PublicKey!: string
 }
 
 User.init(
@@ -58,12 +58,12 @@ User.init(
     sequelize,
     modelName: 'User',
   }
-);
+)
 
 class Contact extends Model<IContact> implements IContact {
-  Contact_id!: number;
-  User_id!: number;
-  Contact_User_id!: number;
+  Contact_id!: number
+  User_id!: number
+  Contact_User_id!: number
 }
 
 Contact.init(
@@ -92,10 +92,10 @@ Contact.init(
     sequelize,
     modelName: 'Contact',
   }
-);
+)
 
 class Conversation extends Model<IConversation> implements IConversation {
-  Conversation_id!: number;
+  Conversation_id!: number
 }
 
 Conversation.init(
@@ -110,12 +110,12 @@ Conversation.init(
     sequelize,
     modelName: 'Conversation',
   }
-);
+)
 
 class UserConversation extends Model<IUserConversation> implements IUserConversation {
-  UserConversation_id!: number;
-  User_id!: number;
-  Conversation_id!: number;
+  UserConversation_id!: number
+  User_id!: number
+  Conversation_id!: number
 }
 
 UserConversation.init(
@@ -144,14 +144,14 @@ UserConversation.init(
     sequelize,
     modelName: 'UserConversation',
   }
-);
+)
 
 class Message extends Model<IMessage> implements IMessage {
-  Message_id!: number;
-  Conversation_id!: number;
-  Sender_id!: number;
-  Message_content!: string;
-  TimeStamp!: Date;
+  Message_id!: number
+  Conversation_id!: number
+  Sender_id!: number
+  Message_content!: string
+  TimeStamp!: Date
 }
 
 Message.init(
@@ -184,6 +184,9 @@ Message.init(
     sequelize,
     modelName: 'Message',
   }
-);
+)
 
-export { User, Contact, Conversation, UserConversation, Message };
+User.belongsToMany(Conversation, { through: UserConversation, foreignKey: 'User_id' })
+Conversation.belongsToMany(User, { through: UserConversation, foreignKey: 'Conversation_id' })
+
+export { User, Contact, Conversation, UserConversation, Message }
