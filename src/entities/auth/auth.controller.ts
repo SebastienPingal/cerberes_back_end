@@ -35,6 +35,7 @@ export default class auth_controller {
             } else {
                 res.status(500).send(typedError.message);
             }
+            console.error(typedError.message)
         }
     }
 
