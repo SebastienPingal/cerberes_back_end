@@ -7,7 +7,6 @@ import user from '../users/users.model'
 export default class auth_controller {
     static async register(req: Request, res: Response) {
         try {
-            console.log('registering user')
             await user.check_if_email_is_used(req.body.User_email)
             auth_helper.validate_password(req.body.User_password)
             auth_helper.validate_email(req.body.User_email)
@@ -30,12 +29,12 @@ export default class auth_controller {
 
         } catch (error) {
             const typedError = error as Error;
+            console.error(typedError.message)
             if (typedError.message === 'Email already used') {
                 res.status(409).send(typedError.message);
             } else {
                 res.status(500).send(typedError.message);
             }
-            console.error(typedError.message)
         }
     }
 
@@ -56,12 +55,13 @@ export default class auth_controller {
         } catch (error) {
             const typedError = error as Error;
             if (typedError.message === 'User not found') {
-                res.status(404).send(typedError.message);
+                res.status(401).send(typedError.message);
             } else if (typedError.message === 'Wrong password') {
                 res.status(401).send(typedError.message);
             } else {
                 res.status(500).send(typedError.message);
             }
+            console.error(typedError.message)
         }
     }
 }
