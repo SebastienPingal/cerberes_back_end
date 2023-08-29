@@ -10,7 +10,13 @@ import cors from 'cors'
 
 const router = Router()
 
-router.use(cors())
+router.use(cors({
+  origin: (origin, callback) => {
+    callback(null, true);
+  },
+  credentials: true
+}))
+
 router.use(auth_Routes)
 router.use(
   '/users',
