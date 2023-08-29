@@ -17,7 +17,7 @@ export default class auth_helper {
             name: user.User_name,
             uuid: user.User_contact_uuid
         }
-        const token = jwt.sign(payload, JWT_secret, { expiresIn: '1d' })
+        const token = jwt.sign(payload, JWT_secret, { expiresIn: '1w' })
         return token
     }
 
