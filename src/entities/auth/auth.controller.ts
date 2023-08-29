@@ -29,6 +29,7 @@ export default class auth_controller {
         {
           httpOnly: true,
           maxAge: 1000 * 60 * 60 * 24 * 7,
+          secure: true,
           sameSite: 'none',
         })
       res.send({ success: true })
@@ -62,6 +63,7 @@ export default class auth_controller {
           httpOnly: true,
           maxAge: 1000 * 60 * 60 * 24 * 7, // 1 week
           sameSite: 'none',
+          secure: true,
         })
       res.send({ success: true })
     } catch (error) {
