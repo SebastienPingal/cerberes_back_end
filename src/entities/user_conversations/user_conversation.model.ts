@@ -4,6 +4,10 @@ import { IUserConversation } from '../../types'
 export default class user_conversation_controller {
   static async create_many (members_id: number[], conversation_id: number) {
     try {
+      // check if members_id exists
+      if (members_id.length === 0) {
+        throw new Error('No members_id provided')
+      }
       const new_user_conversations : IUserConversation[] = members_id.map((member_id) => {
         return { User_id: member_id, Conversation_id : conversation_id } as IUserConversation
       })

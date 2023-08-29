@@ -4,9 +4,10 @@ import { IUserCreation, IUserUpdate, IUser } from '../../types'
 export default class user {
     static async create_one(user: IUserCreation) {
         try {
-            console.log('user', user)
             return await User.create(user)
         } catch (error) {
+            const typedError = error as Error
+            console.error(typedError.message)
             throw new Error('Unable to create user')
         }
     }

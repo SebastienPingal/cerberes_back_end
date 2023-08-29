@@ -51,7 +51,7 @@ User.init(
     },
     PGP_PublicKey: {
       type: DataTypes.TEXT,
-      allowNull: false,
+      allowNull: true,
     },
   },
   {
