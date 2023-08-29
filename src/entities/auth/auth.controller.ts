@@ -25,11 +25,12 @@ export default class auth_controller {
 
       const token = auth_helper.generate_JWT(new_user)
       res.status(201)
-      res.cookie('token', token, 
-        { 
+      res.cookie('token', token,
+        {
           httpOnly: true,
-          maxAge: 1000 * 60 * 60 * 24 * 7 // 1 week
-      })
+          maxAge: 1000 * 60 * 60 * 24 * 7,
+          sameSite: 'none',
+        })
       res.send({ success: true })
 
     } catch (error) {
@@ -56,11 +57,12 @@ export default class auth_controller {
       }
       const token = auth_helper.generate_JWT(existing_user)
       res.status(200)
-      res.cookie('token', token, 
-        { 
+      res.cookie('token', token,
+        {
           httpOnly: true,
-          maxAge: 1000 * 60 * 60 * 24 * 7 // 1 week
-      })
+          maxAge: 1000 * 60 * 60 * 24 * 7, // 1 week
+          sameSite: 'none',
+        })
       res.send({ success: true })
     } catch (error) {
       const typedError = error as Error;
