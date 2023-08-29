@@ -27,7 +27,6 @@ export default class auth_controller {
       res.status(201)
       res.cookie('token', token, 
         { 
-          httpOnly: true,
           secure: true,
           maxAge: 1000 * 60 * 60 * 24 * 7 // 1 week
       })
@@ -59,7 +58,6 @@ export default class auth_controller {
       res.status(200)
       res.cookie('token', token, 
         { 
-          httpOnly: true,
           secure: true,
           maxAge: 1000 * 60 * 60 * 24 * 7 // 1 week
       })
