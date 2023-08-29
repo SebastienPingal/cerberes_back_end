@@ -6,7 +6,7 @@ export interface IUser {
   User_email: string;
   User_password?: string;
   User_contact_uuid?: string;
-  PGP_PublicKey: string;
+  PGP_PublicKey?: string;
 }
 
 export interface IUserCreation extends Optional<IUser, "User_id"> { }
