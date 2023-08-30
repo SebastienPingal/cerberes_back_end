@@ -16,8 +16,12 @@ jobs:
         with:
           node-version: 16
 
+      - uses: pnpm/action-setup@v2
+        with:
+          version: 8
+
       - name: Build
-        run: npm install && npm run build
+        run: pnpm install && pnpm run build
 
       - name: Archive files
         run: tar -czvf package.tar.gz dist/ package.json
@@ -43,6 +47,6 @@ jobs:
             set -e
             cd Documents/PROG/cerberes/back_end
             tar -xzvf package.tar.gz
-            npm install
+            pnpm install
             cd
             pm2 start pm2.config.js
