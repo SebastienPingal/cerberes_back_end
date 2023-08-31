@@ -49,4 +49,4 @@ jobs:
             tar -xzvf package.tar.gz
             pnpm install
             cd
-            pm2 start pm2.config.js
+            pm2 restart pm2.config.js
