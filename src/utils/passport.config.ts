@@ -1,10 +1,18 @@
-import { Strategy as JwtStrategy, ExtractJwt } from 'passport-jwt'
+import { Strategy as JwtStrategy } from 'passport-jwt'
 import passport from 'passport'
 import user from '../entities/users/users.model'
-import { IUser } from '../types'
+import { Request } from 'express'
+
+const cookieExtractor = function(req : Request) {
+    var token = null;
+    if (req && req.cookies) {
+      token = req.cookies['token'];
+    }
+    return token;
+}
 
 const options = {
-  jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+  jwtFromRequest: cookieExtractor,
   secretOrKey: process.env.JWT_SECRET ?? 'mysecret869'
 }
 
