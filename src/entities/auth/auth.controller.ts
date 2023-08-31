@@ -29,10 +29,9 @@ export default class auth_controller {
         {
           httpOnly: true,
           maxAge: 1000 * 60 * 60 * 24 * 7,
-          secure: true,
-          sameSite: 'none',
+          sameSite: 'lax',
         })
-      res.send({ success: true })
+      res.json(new_user)
 
     } catch (error) {
       const typedError = error as Error;
@@ -62,10 +61,9 @@ export default class auth_controller {
         {
           httpOnly: true,
           maxAge: 1000 * 60 * 60 * 24 * 7, // 1 week
-          sameSite: 'none',
-          secure: true,
+          sameSite: 'lax',
         })
-      res.send({ success: true })
+      res.json(existing_user)
     } catch (error) {
       const typedError = error as Error;
       if (typedError.message === 'User not found') {
