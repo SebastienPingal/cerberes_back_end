@@ -4,6 +4,7 @@ import users_Routes from './entities/users/users.router'
 import contacts_Routes from './entities/contacts/contacts.router'
 import conversations_Routes from './entities/conversations/conversations.router'
 import my_passport from './utils/passport.config'
+import cookieParser from 'cookie-parser'
 import { testConnection } from './utils/sequelize.client'
 import { User, Contact, Conversation, UserConversation, Message } from '../sequelize/sequelize.models'
 import cors from 'cors'
@@ -20,16 +21,19 @@ router.use(cors({
 router.use(auth_Routes)
 router.use(
   '/users',
+  cookieParser(),
   my_passport.authenticate('jwt', { session: false }),
   users_Routes
 )
 router.use(
   '/contacts',
+  cookieParser(),
   my_passport.authenticate('jwt', { session: false }),
   contacts_Routes
 )
 router.use(
   '/conversations',
+  cookieParser(),
   my_passport.authenticate('jwt', { session: false }),
     conversations_Routes
 )
