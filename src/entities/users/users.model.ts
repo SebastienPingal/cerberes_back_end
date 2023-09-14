@@ -56,7 +56,7 @@ export default class user {
           }
         ]
       }) as IUser
-
+      console.log('userWithLists', userWithLists)
       const contactUserIds = userWithLists.AddedContacts?.map(contact => contact.AddedBy?.User_id);
       if (!contactUserIds) {
         throw new Error('Unable to find user')
