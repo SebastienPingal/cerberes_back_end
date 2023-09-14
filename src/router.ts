@@ -63,11 +63,11 @@ router.get('/testDB', async (req, res) => {
 router.get('/syncDB', async (req, res) => {
   try {
     console.log('syncing db')
-    await User.sync({ force: true })
-    await Contact.sync({ force: true })
-    await Conversation.sync({ force: true })
-    await UserConversation.sync({ force: true })
-    await Message.sync({ force: true })
+    await User.sync()
+    await Contact.sync()
+    await Conversation.sync()
+    await UserConversation.sync()
+    await Message.sync()
     console.log('synced db')
     res.send('OK')
   } catch (error) {
