@@ -8,6 +8,9 @@ export interface IUser {
   User_contact_uuid?: string;
   PGP_PublicKey?: string;
   contact_list?: IContact[];
+  demand_list?: IContact[];
+  AddedContacts?: IContact[];
+  AddedByOthers?: IContact[];
 }
 
 export interface IUserCreation extends Optional<IUser, "User_id"> { }
@@ -18,8 +21,8 @@ export interface IContact {
   Contact_id: number;
   User_id: number;
   Contact_User_id: number;
-  User_name?: string;
-  PGP_PublicKey?: string;
+  AddedBy?: IUser;
+  User?: IUser;
 }
 
 export interface IConversation {
