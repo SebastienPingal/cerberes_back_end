@@ -36,6 +36,7 @@ export default class user {
           {
             model: Contact,
             as: 'AddedContacts',
+            required: false,
             include: [{
               model: User,
               as: 'AddedBy',
@@ -45,7 +46,9 @@ export default class user {
           {
             model: Contact,
             as: 'AddedByOthers',
+            required: false,
             include: [{
+
               model: User,
               as: 'User',
               attributes: ['User_name', 'PGP_PublicKey']
