@@ -60,7 +60,6 @@ export default class user {
       }
       userWithLists.demand_list = userWithLists.AddedByOthers?.filter(contact => !contactUserIds.includes(contact.User?.User_id));
 
-      // You can then modify the object to have the desired format or just pick the fields you want.
       return {
         ...userWithLists,
         contact_list: userWithLists.AddedContacts,

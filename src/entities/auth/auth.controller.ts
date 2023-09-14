@@ -1,6 +1,6 @@
 import { type Request, type Response } from 'express'
 import bcrypt from 'bcrypt'
-import type { IUserCreation } from '../../types'
+import type { IUserCreation, IUser } from '../../types'
 import auth_helper from './auth.helper'
 import user from '../users/users.model'
 
@@ -47,11 +47,14 @@ export default class auth_controller {
   static async login(req: Request, res: Response) {
     try {
       console.log('logging in user')
-      const existing_user = await user.find_one_by_email(req.body.User_email)
-      if (!existing_user) {
+      const existing_user = await user.find_one_by_email(req.body.User_email) as IUser
+      if (!existing_user || !existing_user.User_password) {
         throw new Error('User not found')
       }
-      const password_valid = await bcrypt.compare(req.body.User_password, existing_user.User_password)
+      const password_valid = bcrypt.compare(
+        req.body.User_password,
+        existing_user.User_password
+      )
       if (!password_valid) {
         throw new Error('Wrong password')
       }
