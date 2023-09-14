@@ -57,18 +57,19 @@ export default class user {
         ]
       }) as IUser
       console.log('userWithLists', userWithLists)
-      if (userWithLists.AddedContacts) {
-      const contactUserIds = userWithLists.AddedContacts?.map(contact => contact.AddedBy?.User_id);
-      }
-      if (userWithLists.AddedByOthers) {
-      userWithLists.demand_list = userWithLists.AddedByOthers?.filter(contact => !contactUserIds.includes(contact.User?.User_id));
-      }
+      let contactUserIds: number[] = [];
+
+      if (userWithLists.AddedContacts)
+        contactUserIds = userWithLists.AddedContacts.map(contact => contact.AddedBy?.User_id!)
+
+      if (userWithLists.AddedByOthers)
+        userWithLists.demand_list = userWithLists.AddedByOthers?.filter(contact => !contactUserIds.includes(contact.User!.User_id));
 
       return {
         ...userWithLists,
         contact_list: userWithLists.AddedContacts,
         demand_list: userWithLists.demand_list
-      };
+      }
     } catch (error) {
       throw new Error('Unable to find user')
     }
