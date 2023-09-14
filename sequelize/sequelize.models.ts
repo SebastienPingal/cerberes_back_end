@@ -189,4 +189,10 @@ Message.init(
 User.belongsToMany(Conversation, { through: UserConversation, foreignKey: 'User_id' })
 Conversation.belongsToMany(User, { through: UserConversation, foreignKey: 'Conversation_id' })
 
+User.hasMany(Contact, { as: 'AddedContacts', foreignKey: 'User_id' });
+Contact.belongsTo(User, { as: 'User', foreignKey: 'User_id' });
+
+User.hasMany(Contact, { as: 'AddedByOthers', foreignKey: 'Contact_User_id' });
+Contact.belongsTo(User, { as: 'AddedBy', foreignKey: 'Contact_User_id' });
+
 export { User, Contact, Conversation, UserConversation, Message }

@@ -1,4 +1,5 @@
-import { Contact } from '../../../sequelize/sequelize.models';
+import { Op } from 'sequelize';
+import { User, Contact } from '../../../sequelize/sequelize.models';
 import { IContact } from '../../types';
 
 
@@ -38,15 +39,18 @@ export default class contact {
 
   static async find_all_by_user_id(id: number) {
     try {
-      const contact_as_User = await Contact.findAll(
-        { where: { User_id: id } }
-      )
-      const contact_as_contact_User = await Contact.findAll(
-        { where: { Contact_User_id: id } }
-      )
-      return [...contact_as_User, ...contact_as_contact_User]
+      const contacts = await Contact.findAll({
+        where: {
+          User_id: id,
+        },
+        include: [{
+          model: User,
+          attributes: ['User_name', 'PGP_PublicKey']
+        }]
+      });
+      return contacts;
     } catch (error) {
-      throw new Error('Unable to find contacts')
+      throw new Error('Unable to find contacts');
     }
   }
 }
