@@ -58,13 +58,15 @@ export default class user {
       }) as IUser
       let contactUserIds: number[] = [];
 
-      if (userWithLists.AddedContacts)
+      if (userWithLists.AddedContacts) {
+        console.log('userWithLists.AddedContacts', userWithLists.AddedContacts)
         contactUserIds = userWithLists.AddedContacts.map(contact => contact.AddedBy?.User_id!)
-        console.log('contactUserIds', contactUserIds)
-        
-
-      if (userWithLists.AddedByOthers)
-        userWithLists.demand_list = userWithLists.AddedByOthers?.filter(contact => !contactUserIds.includes(contact.User!.User_id));
+        if (userWithLists.AddedByOthers)
+          userWithLists.demand_list = userWithLists.AddedByOthers?.filter(contact => !contactUserIds.includes(contact.User!.User_id));
+      } else if (userWithLists.AddedByOthers) {
+        userWithLists.demand_list = userWithLists.AddedByOthers
+        console.log('userWithLists.demand_list', userWithLists.demand_list)
+      }
 
       return {
         ...userWithLists,
