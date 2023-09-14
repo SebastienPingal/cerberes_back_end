@@ -56,11 +56,12 @@ export default class user {
           }
         ]
       }) as IUser
-      console.log('userWithLists', userWithLists)
       let contactUserIds: number[] = [];
 
       if (userWithLists.AddedContacts)
         contactUserIds = userWithLists.AddedContacts.map(contact => contact.AddedBy?.User_id!)
+        console.log('contactUserIds', contactUserIds)
+        
 
       if (userWithLists.AddedByOthers)
         userWithLists.demand_list = userWithLists.AddedByOthers?.filter(contact => !contactUserIds.includes(contact.User!.User_id));
