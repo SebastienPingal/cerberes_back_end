@@ -8,13 +8,8 @@ export default class user_controller {
     try {
       const this_user = req.user as IUser
       if (!this_user) throw new Error('User is required')
+      console.log('this_user: ', this_user)
 
-      try {
-        const contact_list = await contacts.find_all_by_user_id(this_user.User_id) as IContact[]
-        if (contact_list) this_user.contact_list = contact_list
-      } catch (error) {
-        console.error(error)
-      }
       res.status(200)
       res.send(this_user)
     } catch (error) {

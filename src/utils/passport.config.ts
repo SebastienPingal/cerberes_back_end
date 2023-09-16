@@ -23,7 +23,7 @@ const my_passport = passport.use(
       let this_user 
       await user.find_one_by_id(payload.id).then((response) => {
         if (!response) throw new Error()
-        this_user = response.dataValues
+        this_user = response
       })
       done(null, this_user)
     } catch (error) {

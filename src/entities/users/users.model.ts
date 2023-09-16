@@ -1,5 +1,5 @@
 import { User, Contact } from '../../../sequelize/sequelize.models'
-import { IUserCreation, IUserUpdate, IUser } from '../../types'
+import { IUserCreation, IUserUpdate, IUser, IContact } from '../../types'
 
 export default class user {
   static async create_one(user: IUserCreation) {
@@ -14,7 +14,38 @@ export default class user {
 
   static async find_one_by_uuid(uuid: string) {
     try {
-      return await User.findOne({ where: { User_contact_uuid: uuid } })
+      console.log('finding user with uuid', uuid)
+      const userWithLists = await User.findOne({
+        where: { User_contact_uuid: uuid },
+        include: [
+          {
+            model: Contact,
+            as: 'contact_list',
+            required: false,
+            include: [{
+              model: User,
+              as: 'User',
+              attributes: ['User_name', 'PGP_PublicKey']
+            }]
+
+          },
+          {
+            model: Contact,
+            as: 'demands',
+            required: false,
+            include: [{
+              model: User,
+              as: 'AddedBy',
+              attributes: ['User_name', 'PGP_PublicKey']
+            }]
+          }
+        ]
+      }) as IUser;
+
+      if (!userWithLists) throw new Error('User not found');
+
+      delete userWithLists.User_password
+      return userWithLists
     } catch (error) {
       throw new Error('Unable to find user')
     }
@@ -22,59 +53,83 @@ export default class user {
 
   static async find_one_by_id(id: number) {
     try {
-      return await User.findOne({ where: { User_id: id } })
-    } catch (error) {
-      throw new Error('Unable to find user')
-    }
-  }
-
-  static async find_one_by_email(email: string) {
-    try {
+      console.log('finding user with id', id)
       const userWithLists = await User.findOne({
-        where: { User_email: email },
+        where: { User_id: id },
         include: [
           {
             model: Contact,
-            as: 'AddedContacts',
+            as: 'contact_list',
+            required: false,
+            include: [{
+              model: User,
+              as: 'User',
+              attributes: ['User_name', 'PGP_PublicKey']
+            }]
+
+          },
+          {
+            model: Contact,
+            as: 'demands',
             required: false,
             include: [{
               model: User,
               as: 'AddedBy',
               attributes: ['User_name', 'PGP_PublicKey']
             }]
-          },
+          }
+        ]
+      }) as IUser;
+
+      if (!userWithLists) throw new Error('User not found');
+
+      delete userWithLists.User_password
+      return userWithLists
+    } catch (error) {
+      const typedError = error as Error;
+      console.error(typedError.message);
+      throw new Error('Unable to find user');
+    }
+  }
+
+  static async find_one_by_email(email: string): Promise<IUser | undefined> {
+    try {
+      console.log('finding user with email', email)
+      const userWithLists = await User.findOne({
+        where: { User_email: email },
+        include: [
           {
             model: Contact,
-            as: 'AddedByOthers',
+            as: 'contact_list',
             required: false,
             include: [{
-
               model: User,
               as: 'User',
               attributes: ['User_name', 'PGP_PublicKey']
             }]
+
+          },
+          {
+            model: Contact,
+            as: 'demands',
+            required: false,
+            include: [{
+              model: User,
+              as: 'AddedBy',
+              attributes: ['User_name', 'PGP_PublicKey']
+            }]
           }
         ]
-      }) as IUser
-      let contactUserIds: number[] = [];
+      }) as IUser;
 
-      if (userWithLists.AddedContacts) {
-        console.log('userWithLists.AddedContacts', userWithLists.AddedContacts)
-        contactUserIds = userWithLists.AddedContacts.map(contact => contact.AddedBy?.User_id!)
-        if (userWithLists.AddedByOthers)
-          userWithLists.demand_list = userWithLists.AddedByOthers?.filter(contact => !contactUserIds.includes(contact.User!.User_id));
-      } else if (userWithLists.AddedByOthers) {
-        userWithLists.demand_list = userWithLists.AddedByOthers
-        console.log('userWithLists.demand_list', userWithLists.demand_list)
-      }
+      if (!userWithLists) throw new Error('User not found');
 
-      return {
-        ...userWithLists,
-        contact_list: userWithLists.AddedContacts,
-        demand_list: userWithLists.demand_list
-      }
+      delete userWithLists.User_password
+      return userWithLists
     } catch (error) {
-      throw new Error('Unable to find user')
+      const typedError = error as Error;
+      console.error(typedError.message);
+      throw new Error('Unable to find user');
     }
   }
 

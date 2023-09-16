@@ -1,4 +1,3 @@
-import { Op } from 'sequelize';
 import { User, Contact } from '../../../sequelize/sequelize.models';
 import { IContact } from '../../types';
 
@@ -39,6 +38,7 @@ export default class contact {
 
   static async find_all_by_user_id(id: number) {
     try {
+      console.log('finding contacts for user id: ', id);
       const contacts = await Contact.findAll({
         where: {
           User_id: id,

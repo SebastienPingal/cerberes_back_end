@@ -48,10 +48,12 @@ export default class auth_controller {
     try {
       console.log('logging in user')
       const existing_user = await user.find_one_by_email(req.body.User_email) as IUser
-      if (!existing_user || !existing_user.User_password) {
+      console.log('existing_user', existing_user)
+      if (!existing_user) {
         throw new Error('User not found')
       }
-      const password_valid = bcrypt.compare(
+      if (!existing_user.User_password) throw new Error('User has no password')
+      const password_valid = await bcrypt.compare(
         req.body.User_password,
         existing_user.User_password
       )
