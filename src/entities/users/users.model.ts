@@ -1,4 +1,4 @@
-import { User, Contact } from '../../../sequelize/sequelize.models'
+import { User, Contact, Conversation, UserConversation } from '../../../sequelize/sequelize.models'
 import { IUserCreation, IUserUpdate, IUser, IContact } from '../../types'
 
 export default class user {
@@ -38,8 +38,10 @@ export default class user {
               as: 'AddedBy',
               attributes: ['User_name', 'PGP_PublicKey']
             }]
-          }
-        ]
+          }, {
+            model: Conversation,
+            as: 'Conversations',
+          }]
       }) as IUser;
 
       if (!userWithLists) throw new Error('User not found');
@@ -77,6 +79,9 @@ export default class user {
               as: 'AddedBy',
               attributes: ['User_name', 'PGP_PublicKey']
             }]
+          }, {
+            model: Conversation,
+            as: 'Conversations',
           }
         ]
       }) as IUser;
@@ -118,8 +123,10 @@ export default class user {
               as: 'AddedBy',
               attributes: ['User_name', 'PGP_PublicKey']
             }]
-          }
-        ]
+          }, {
+            model: Conversation,
+            as: 'Conversations',
+          }]
       }) as IUser;
 
       if (!userWithLists) throw new Error('User not found');
