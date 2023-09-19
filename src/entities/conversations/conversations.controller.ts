@@ -33,13 +33,11 @@ export default class conversation_controller {
       }
       //check if conversatgion already exist
       const existing_conversation = await conversation.find_one_by_members_id(members_id)
-      console.log('existing_conversation', existing_conversation)
       if (existing_conversation) {
         throw new Error('Conversation already exist')
       }
 
       const new_conversation = await conversation.create_one(members_id) as IConversation
-      await user_conversation.create_many(members_id, new_conversation.Conversation_id)
       res.status(200).json(new_conversation)
     } catch (error) {
       const typed_error = error as Error

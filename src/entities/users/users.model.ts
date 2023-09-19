@@ -1,3 +1,4 @@
+import { Op } from 'sequelize'
 import { User, Contact, Conversation, UserConversation } from '../../../sequelize/sequelize.models'
 import { IUserCreation, IUserUpdate, IUser, IContact } from '../../types'
 
@@ -27,7 +28,6 @@ export default class user {
               as: 'User',
               attributes: ['User_name', 'PGP_PublicKey']
             }]
-
           },
           {
             model: Contact,
@@ -41,9 +41,19 @@ export default class user {
           }, {
             model: Conversation,
             as: 'Conversations',
+            through: { attributes: [] },
+            include: [
+              {
+                model: User,
+                as: 'Users',
+                through: { attributes: [] },
+                where: { User_contact_uuid: { [Op.ne]: uuid } },
+                required: false,
+                attributes: ['User_name', 'PGP_PublicKey', 'User_id']
+              }
+            ]
           }]
       }) as IUser;
-
       if (!userWithLists) throw new Error('User not found');
 
       delete userWithLists.User_password
@@ -68,7 +78,6 @@ export default class user {
               as: 'User',
               attributes: ['User_name', 'PGP_PublicKey']
             }]
-
           },
           {
             model: Contact,
@@ -82,10 +91,19 @@ export default class user {
           }, {
             model: Conversation,
             as: 'Conversations',
-          }
-        ]
+            through: { attributes: [] },
+            include: [
+              {
+                model: User,
+                as: 'Users',
+                through: { attributes: [] },
+                where: { User_id: { [Op.ne]: id } },
+                required: false,
+                attributes: ['User_name', 'PGP_PublicKey', 'User_id']
+              }
+            ]
+          }]
       }) as IUser;
-
       if (!userWithLists) throw new Error('User not found');
 
       delete userWithLists.User_password
@@ -112,7 +130,6 @@ export default class user {
               as: 'User',
               attributes: ['User_name', 'PGP_PublicKey']
             }]
-
           },
           {
             model: Contact,
@@ -126,6 +143,17 @@ export default class user {
           }, {
             model: Conversation,
             as: 'Conversations',
+            through: { attributes: [] },
+            include: [
+              {
+                model: User,
+                as: 'Users',
+                through: { attributes: [] },
+                where: { User_email: { [Op.ne]: email } },
+                required: false,
+                attributes: ['User_name', 'PGP_PublicKey', 'User_id']
+              }
+            ]
           }]
       }) as IUser;
 

@@ -11,7 +11,7 @@ export interface IUser {
   demand_list?: IContact[];
   AddedContacts?: IContact[];
   AddedByOthers?: IContact[];
-  conversations?: IConversation[]; 
+  Conversations?: IConversation[]; 
 }
 
 export interface IUserCreation extends Optional<IUser, "User_id"> { }
@@ -28,6 +28,7 @@ export interface IContact {
 
 export interface IConversation {
   Conversation_id: number;
+  Users?: IUser[];
 }
 
 export interface IUserConversation {
