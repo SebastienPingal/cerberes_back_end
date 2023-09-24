@@ -23,7 +23,8 @@ class User extends Model<IUser, IUserCreation> implements IUser {
   User_email!: string
   User_password!: string
   User_contact_uuid?: string
-  PGP_PublicKey!: string
+  encryption_public_key?: Uint8Array
+  signing_public_key?: Uint8Array
 }
 
 User.init(
@@ -49,10 +50,14 @@ User.init(
       type: DataTypes.STRING,
       allowNull: false,
     },
-    PGP_PublicKey: {
+    encryption_public_key: {
       type: DataTypes.TEXT,
       allowNull: true,
     },
+    signing_public_key: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    }
   },
   {
     sequelize,

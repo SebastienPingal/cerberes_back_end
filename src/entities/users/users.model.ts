@@ -26,7 +26,7 @@ export default class user {
             include: [{
               model: User,
               as: 'User',
-              attributes: ['User_name', 'PGP_PublicKey']
+              attributes: ['User_name', 'encryption_public_key', 'signing_public_key']
             }]
           },
           {
@@ -36,7 +36,7 @@ export default class user {
             include: [{
               model: User,
               as: 'AddedBy',
-              attributes: ['User_name', 'PGP_PublicKey']
+              attributes: ['User_name', 'encryption_public_key', 'signing_public_key']
             }]
           }, {
             model: Conversation,
@@ -49,12 +49,12 @@ export default class user {
                 through: { attributes: [] },
                 where: { User_contact_uuid: { [Op.ne]: uuid } },
                 required: false,
-                attributes: ['User_name', 'PGP_PublicKey', 'User_id']
+                attributes: ['User_name', 'encryption_public_key', 'signing_public_key', 'User_id']
               }
             ]
           }]
-      }) as IUser;
-      if (!userWithLists) throw new Error('User not found');
+      }) as IUser
+      if (!userWithLists) throw new Error('User not found')
 
       delete userWithLists.User_password
       return userWithLists
@@ -76,7 +76,7 @@ export default class user {
             include: [{
               model: User,
               as: 'User',
-              attributes: ['User_name', 'PGP_PublicKey']
+              attributes: ['User_name', 'encryption_public_key', 'signing_public_key']
             }]
           },
           {
@@ -86,7 +86,7 @@ export default class user {
             include: [{
               model: User,
               as: 'AddedBy',
-              attributes: ['User_name', 'PGP_PublicKey']
+              attributes: ['User_name', 'encryption_public_key', 'signing_public_key']
             }]
           }, {
             model: Conversation,
@@ -99,19 +99,19 @@ export default class user {
                 through: { attributes: [] },
                 where: { User_id: { [Op.ne]: id } },
                 required: false,
-                attributes: ['User_name', 'PGP_PublicKey', 'User_id']
+                attributes: ['User_name', 'encryption_public_key', 'signing_public_key', 'User_id']
               }
             ]
           }]
-      }) as IUser;
-      if (!userWithLists) throw new Error('User not found');
+      }) as IUser
+      if (!userWithLists) throw new Error('User not found')
 
       delete userWithLists.User_password
       return userWithLists
     } catch (error) {
-      const typedError = error as Error;
-      console.error(typedError.message);
-      throw new Error('Unable to find user');
+      const typedError = error as Error
+      console.error(typedError.message)
+      throw new Error('Unable to find user')
     }
   }
 
@@ -128,7 +128,7 @@ export default class user {
             include: [{
               model: User,
               as: 'User',
-              attributes: ['User_name', 'PGP_PublicKey']
+              attributes: ['User_name', 'encryption_public_key', 'signing_public_key']
             }]
           },
           {
@@ -138,7 +138,7 @@ export default class user {
             include: [{
               model: User,
               as: 'AddedBy',
-              attributes: ['User_name', 'PGP_PublicKey']
+              attributes: ['User_name', 'encryption_public_key', 'signing_public_key']
             }]
           }, {
             model: Conversation,
@@ -151,20 +151,20 @@ export default class user {
                 through: { attributes: [] },
                 where: { User_email: { [Op.ne]: email } },
                 required: false,
-                attributes: ['User_name', 'PGP_PublicKey', 'User_id']
+                attributes: ['User_name', 'encryption_public_key', 'signing_public_key', 'User_id']
               }
             ]
           }]
-      }) as IUser;
+      }) as IUser
 
-      if (!userWithLists) throw new Error('User not found');
+      if (!userWithLists) throw new Error('User not found')
 
       delete userWithLists.User_password
       return userWithLists
     } catch (error) {
-      const typedError = error as Error;
-      console.error(typedError.message);
-      throw new Error('Unable to find user');
+      const typedError = error as Error
+      console.error(typedError.message)
+      throw new Error('Unable to find user')
     }
   }
 
@@ -188,7 +188,7 @@ export default class user {
   static async update_one_by_id(user_to_update: IUser, update: IUserUpdate) {
     try {
       if (!user_to_update || !update) {
-        throw new Error('Invalid input');
+        throw new Error('Invalid input')
       }
       const { User_id, User_password, ...fields_to_update } = update
 
@@ -204,12 +204,40 @@ export default class user {
           updated_user = response.dataValues as IUser
         })
 
-      return updated_user
+      return this.find_one_by_id(updated_user.User_id)
 
     } catch (error) {
       const typedError = error as Error
-      console.error("Error updating user:", typedError.message);
-      throw new Error('Unable to update user');
+      console.error("Error updating user:", typedError.message)
+      throw new Error('Unable to update user')
+    }
+  }
+
+  static async update_public_keys(user_to_update: IUser, encryption_public_key: Uint8Array, signing_public_key: Uint8Array) {
+    try {
+      if (!user_to_update || !encryption_public_key || !signing_public_key) {
+        throw new Error('Invalid input')
+      }
+
+      await User.update(
+        { encryption_public_key, signing_public_key },
+        { where: { User_id: user_to_update.User_id }}
+      )
+
+      let updated_user = {} as IUser
+      await User.findOne({ where: { User_id: user_to_update.User_id } })
+        .then((response) => {
+          if (!response) throw new Error('Could not find user after update')
+          updated_user = response.dataValues as IUser
+        })
+      console.log('updated_user', updated_user)
+
+      return this.find_one_by_id(updated_user.User_id)
+
+    } catch (error) {
+      const typedError = error as Error
+      console.error("Error updating user:", typedError.message)
+      throw new Error('Unable to update user')
     }
   }
 }
