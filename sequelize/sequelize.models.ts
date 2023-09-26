@@ -156,7 +156,6 @@ class Message extends Model<IMessage> implements IMessage {
   Conversation_id!: number
   Sender_id!: number
   Message_content!: string
-  TimeStamp!: Date
 }
 
 Message.init(

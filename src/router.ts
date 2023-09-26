@@ -1,8 +1,9 @@
 import { Router } from 'express'
-import auth_Routes from './entities/auth/auth.router'
-import users_Routes from './entities/users/users.router'
-import contacts_Routes from './entities/contacts/contacts.router'
-import conversations_Routes from './entities/conversations/conversations.router'
+import auth_routes from './entities/auth/auth.router'
+import users_routes from './entities/users/users.router'
+import contacts_routes from './entities/contacts/contacts.router'
+import conversations_routes from './entities/conversations/conversations.router'
+import messages_routes from './entities/messages/messages.router'
 import my_passport from './utils/passport.config'
 import cookieParser from 'cookie-parser'
 import { testConnection } from './utils/sequelize.client'
@@ -13,29 +14,40 @@ const router = Router()
 
 router.use(cors({
   origin: (origin, callback) => {
-    callback(null, true);
+    try {
+      callback(null, true);
+    } catch (error) {
+      console.error('Error inside CORS Middleware', error);
+    }
   },
   credentials: true
 }))
 
-router.use(auth_Routes)
+
+router.use(auth_routes)
 router.use(
   '/users',
   cookieParser(),
   my_passport.authenticate('jwt', { session: false }),
-  users_Routes
+  users_routes
 )
 router.use(
   '/contacts',
   cookieParser(),
   my_passport.authenticate('jwt', { session: false }),
-  contacts_Routes
+  contacts_routes
 )
 router.use(
   '/conversations',
   cookieParser(),
   my_passport.authenticate('jwt', { session: false }),
-    conversations_Routes
+  conversations_routes
+)
+router.use(
+  '/messages',
+  cookieParser(),
+  my_passport.authenticate('jwt', { session: false }),
+  messages_routes
 )
 
 // ___________________________________
@@ -63,11 +75,11 @@ router.get('/testDB', async (req, res) => {
 router.get('/syncDB', async (req, res) => {
   try {
     console.log('syncing db')
-    await User.sync()
-    await Contact.sync()
-    await Conversation.sync()
-    await UserConversation.sync()
-    await Message.sync()
+    await User.sync({ force: true })
+    await Contact.sync({ force: true })
+    await Conversation.sync({ force: true })
+    await UserConversation.sync({ force: true })
+    await Message.sync({ force: true })
     console.log('synced db')
     res.send('OK')
   } catch (error) {

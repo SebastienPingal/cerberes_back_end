@@ -12,7 +12,7 @@ export interface IUser {
   demand_list?: IContact[];
   AddedContacts?: IContact[];
   AddedByOthers?: IContact[];
-  Conversations?: IConversation[]; 
+  Conversations?: IConversation[];
 }
 
 export interface IUserCreation extends Optional<IUser, "User_id"> { }
@@ -39,8 +39,9 @@ export interface IUserConversation {
 }
 
 export interface IMessage {
-  Message_id: number;
+  Message_id?: number;
   Conversation_id: number;
   Sender_id: number;
   Message_content: string;
 }
+
