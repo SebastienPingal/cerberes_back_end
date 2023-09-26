@@ -22,6 +22,7 @@ export default class auth_controller {
       } as IUserCreation
 
       const new_user = await user.create_one(user_input as IUserCreation)
+      const full_user = await user.find_one_by_id(new_user.User_id) as IUser
 
       const token = auth_helper.generate_JWT(new_user)
       res.status(201)
@@ -31,7 +32,7 @@ export default class auth_controller {
           maxAge: 1000 * 60 * 60 * 24 * 7,
           sameSite: 'lax',
         })
-      res.json(new_user)
+      res.json(full_user)
 
     } catch (error) {
       const typedError = error as Error;
