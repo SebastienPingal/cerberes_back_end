@@ -26,6 +26,12 @@ export default class message_controller {
       if (!Conversation_id) throw new Error('Conversation_id is required')
       const this_conversation = await conversation.find_one_by_id(Number(Conversation_id))
       if (!this_conversation) throw new Error('Conversation not found')
+      // check that user is in conversation
+      const this_user_id = req.user as IUser
+      if (!this_user_id) throw new Error('User is required')
+      const this_user = await conversation.find_user_in_conversation(this_user_id.User_id, Number(Conversation_id))
+      if (!this_user) throw new Error('User not in conversation')
+
       const messages = await message.get_from_conversation(Number(Conversation_id))
       res.status(200).json(messages)
     } catch (error) {

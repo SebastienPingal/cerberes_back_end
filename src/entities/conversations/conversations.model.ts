@@ -82,4 +82,18 @@ export default class conversation_model {
       throw new Error('Unable to find conversation')
     }
   }
+
+  static async find_user_in_conversation(user_id: number, conversation_id: number) {
+    try {
+      const user = await UserConversation.findOne({
+        where: {
+          User_id: user_id,
+          Conversation_id: conversation_id
+        }
+      })
+      return user
+    } catch (error) {
+      throw new Error('Unable to find user in conversation')
+    }
+  }
 }

@@ -21,6 +21,7 @@ const my_passport = passport.use(
     try {
       if (!payload.id) throw new Error()
       let this_user 
+      console.log(payload.id)
       await user.find_one_by_id(payload.id).then((response) => {
         if (!response) throw new Error()
         this_user = response
