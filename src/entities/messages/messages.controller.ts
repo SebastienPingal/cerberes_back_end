@@ -57,9 +57,11 @@ export default class message_controller {
 
   static async delete_messages(req: Request, res: Response) {
     try {
-      const { decrypted_messages_id } = req.body
+      if (!req.query.ids) throw new Error('ids is required')
+      if (typeof req.query.ids !== 'string') throw new Error('ids must be a string')
+      // get the ids from the query ids and create an array fronm it
+      const decrypted_messages_id = req.query.ids.split(',').map((id) => Number(id))
       if (!decrypted_messages_id) throw new Error('decrypted_messages is required')
-      // check that the message belongs to the user
       const this_user = req.user as IUser
       if (!this_user) throw new Error('User is required')
 
