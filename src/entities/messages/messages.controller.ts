@@ -41,6 +41,20 @@ export default class message_controller {
     }
   }
 
+  static async get_all_new_messages_of_user(req: Request, res: Response) {
+    try {
+      const this_user_id = req.user as IUser
+      if (!this_user_id) throw new Error('User is required')
+      const messages = await message.get_all_from_user(this_user_id.User_id)
+
+      res.status(200).json(messages)
+    } catch (error) {
+      const typedError = error as Error
+      console.error(typedError.message)
+      res.status(500).json({ message: typedError.message })
+    }
+  }
+
   static async delete_messages(req: Request, res: Response) {
     try {
       const { decrypted_messages_id } = req.body

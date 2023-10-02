@@ -29,6 +29,20 @@ export default class message_model {
     }
   }
 
+  static async get_all_from_user(User_id: number): Promise<IMessage[]> {
+    try {
+      return await Message.findAll({
+        where: {
+          Sender_id: User_id,
+        },
+      })
+    } catch (error) {
+      const typedError = error as Error
+      console.error(typedError.message)
+      throw new Error(typedError.message)
+    }
+  }
+
   static async delete_one(Message_id: number): Promise<void> {
     try {
       await Message.destroy({
