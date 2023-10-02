@@ -38,20 +38,6 @@ export default class user {
               as: 'AddedBy',
               attributes: ['User_name', 'encryption_public_key', 'signing_public_key']
             }]
-          }, {
-            model: Conversation,
-            as: 'Conversations',
-            through: { attributes: [] },
-            include: [
-              {
-                model: User,
-                as: 'Users',
-                through: { attributes: [] },
-                where: { User_contact_uuid: { [Op.ne]: uuid } },
-                required: false,
-                attributes: ['User_name', 'encryption_public_key', 'signing_public_key', 'User_id']
-              }
-            ]
           }]
       }) as IUser
       if (!userWithLists) throw new Error('User not found')
@@ -88,20 +74,6 @@ export default class user {
               as: 'AddedBy',
               attributes: ['User_name', 'encryption_public_key', 'signing_public_key']
             }]
-          }, {
-            model: Conversation,
-            as: 'Conversations',
-            through: { attributes: [] },
-            include: [
-              {
-                model: User,
-                as: 'Users',
-                through: { attributes: [] },
-                where: { User_id: { [Op.ne]: id } },
-                required: false,
-                attributes: ['User_name', 'encryption_public_key', 'signing_public_key', 'User_id']
-              }
-            ]
           }]
       }) as IUser
       if (!userWithLists) throw new Error('User not found')
@@ -140,20 +112,6 @@ export default class user {
               as: 'AddedBy',
               attributes: ['User_name', 'encryption_public_key', 'signing_public_key']
             }]
-          }, {
-            model: Conversation,
-            as: 'Conversations',
-            through: { attributes: [] },
-            include: [
-              {
-                model: User,
-                as: 'Users',
-                through: { attributes: [] },
-                where: { User_email: { [Op.ne]: email } },
-                required: false,
-                attributes: ['User_name', 'encryption_public_key', 'signing_public_key', 'User_id']
-              }
-            ]
           }]
       }) as IUser
 
