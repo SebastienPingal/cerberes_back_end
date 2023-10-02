@@ -5,7 +5,7 @@ import type { IConversation, IUser } from '../../types'
 import user_conversation from '../user_conversations/user_conversation.model'
 
 export default class conversation_controller {
-  static async get_conversations(req: Request, res: Response) {
+  static async get_conversations_with_new_messages(req: Request, res: Response) {
     try {
       const this_user = req.user as IUser
       const conversations = await conversation.get_conversations(this_user.User_id)

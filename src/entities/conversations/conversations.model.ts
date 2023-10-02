@@ -1,4 +1,4 @@
-import { User, Conversation, UserConversation } from '../../../sequelize/sequelize.models'
+import { User, Message, Conversation, UserConversation } from '../../../sequelize/sequelize.models'
 
 export default class conversation_model {
   static async create_one(members_id: number[]) {
@@ -34,6 +34,9 @@ export default class conversation_model {
               attributes: []
             },
             attributes: ['User_id']
+          }, {
+            model: Message,
+            attributes: ['Message_id', 'Message_content', 'Message_created_at', 'Sender_id'],
           }
         ]
       })
