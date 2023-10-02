@@ -40,4 +40,29 @@ export default class message_controller {
       res.status(500).json({ message: typedError.message })
     }
   }
+
+  static async delete_messages(req: Request, res: Response) {
+    try {
+      const { decrypted_messages_id } = req.body
+      if (!decrypted_messages_id) throw new Error('decrypted_messages is required')
+      // check that the message belongs to the user
+      const this_user = req.user as IUser
+      if (!this_user) throw new Error('User is required')
+
+      decrypted_messages_id.forEach(async (message_id : number) => {
+        const this_message = await message.find_one_by_id(message_id)
+        if (this_message) {
+          if (this_message.Sender_id === this_user.User_id) throw new Error('User not authorized to delete it\'s own messages')
+          const user_in_conversation = await conversation.find_user_in_conversation(this_user.User_id, this_message.Conversation_id)
+          if (!user_in_conversation) throw new Error('User not in conversation')
+          this_message.destroy()
+        }
+      })
+
+    } catch (error) {
+      const typedError = error as Error
+      console.error(typedError.message)
+      res.status(500).json({ message: typedError.message })
+    }
+  }
 }

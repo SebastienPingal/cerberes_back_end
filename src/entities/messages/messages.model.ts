@@ -42,4 +42,18 @@ export default class message_model {
       throw new Error(typedError.message)
     }
   }
+
+  static async find_one_by_id(Message_id: number): Promise<Message | null> {
+    try {
+      return await Message.findOne({
+        where: {
+          Message_id,
+        },
+      })
+    } catch (error) {
+      const typedError = error as Error
+      console.error(typedError.message)
+      throw new Error(typedError.message)
+    }
+  }
 }
