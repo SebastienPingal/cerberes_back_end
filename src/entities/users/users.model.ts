@@ -26,7 +26,7 @@ export default class user {
             include: [{
               model: User,
               as: 'User',
-              attributes: ['User_name', 'encryption_public_key', 'signing_public_key']
+              attributes: ['User_name', 'encryption_public_key', 'signing_public_key', 'User_id']
             }]
           },
           {
@@ -36,7 +36,7 @@ export default class user {
             include: [{
               model: User,
               as: 'AddedBy',
-              attributes: ['User_name', 'encryption_public_key', 'signing_public_key']
+              attributes: ['User_name', 'encryption_public_key', 'signing_public_key', 'User_id']
             }]
           }]
       }) as IUser
@@ -62,7 +62,7 @@ export default class user {
             include: [{
               model: User,
               as: 'User',
-              attributes: ['User_name', 'encryption_public_key', 'signing_public_key']
+              attributes: ['User_name', 'encryption_public_key', 'signing_public_key', 'User_id']
             }]
           },
           {
@@ -72,7 +72,7 @@ export default class user {
             include: [{
               model: User,
               as: 'AddedBy',
-              attributes: ['User_name', 'encryption_public_key', 'signing_public_key']
+              attributes: ['User_name', 'encryption_public_key', 'signing_public_key', 'User_id']
             }]
           }]
       }) as IUser
@@ -100,7 +100,7 @@ export default class user {
             include: [{
               model: User,
               as: 'User',
-              attributes: ['User_name', 'encryption_public_key', 'signing_public_key']
+              attributes: ['User_name', 'encryption_public_key', 'signing_public_key', 'User_id']
             }]
           },
           {
@@ -110,7 +110,7 @@ export default class user {
             include: [{
               model: User,
               as: 'AddedBy',
-              attributes: ['User_name', 'encryption_public_key', 'signing_public_key']
+              attributes: ['User_name', 'encryption_public_key', 'signing_public_key', 'User_id']
             }]
           }]
       }) as IUser

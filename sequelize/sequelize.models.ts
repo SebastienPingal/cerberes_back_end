@@ -199,7 +199,7 @@ Contact.belongsTo(User, { as: 'AddedBy', foreignKey: 'User_id' })
 User.hasMany(Contact, { as: 'demands', foreignKey: 'Contact_User_id' })
 Contact.belongsTo(User, { as: 'User', foreignKey: 'Contact_User_id' })
 
-Conversation.hasMany(Message, { as: 'messages', foreignKey: 'Conversation_id' })
+Conversation.hasMany(Message, { as: 'Messages', foreignKey: 'Conversation_id' })
 Message.belongsTo(Conversation, { as: 'Conversation', foreignKey: 'Conversation_id' })
 
 export { User, Contact, Conversation, UserConversation, Message }

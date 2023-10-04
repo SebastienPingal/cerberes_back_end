@@ -1,5 +1,6 @@
 import { User, Message, Conversation, UserConversation } from '../../../sequelize/sequelize.models'
-
+import { IUser } from '../../types'
+import { Op } from 'sequelize'
 export default class conversation_model {
   static async create_one(members_id: number[]) {
     try {
@@ -24,25 +25,42 @@ export default class conversation_model {
 
   static async get_conversations(user_id: number) {
     try {
-      const conversations = await Conversation.findAll({
-        attributes: ['Conversation_id'],
+      const user = await User.findOne({
+        where: { User_id: user_id },
         include: [
           {
-            model: User,
+            model: Conversation,
+            as: 'Conversations',
             through: {
-              where: { User_id: user_id },
               attributes: []
             },
-            attributes: ['User_id']
-          }, {
-            model: Message,
-            attributes: ['Message_id', 'Message_content', 'Message_created_at', 'Sender_id'],
+            include: [
+              {
+                model: User,
+                as: 'Users',
+                where: {
+                  User_id: {
+                    [Op.ne]: user_id // Exclude the current user
+                  }
+                },
+                attributes: ['User_id', 'User_name', 'encryption_public_key', 'signing_public_key'],
+              },
+              {
+                model: Message,
+                as: 'Messages',
+                where: { Sender_id: { [Op.ne]: user_id } },
+                attributes: ['Message_id', 'Message_content', 'createdAt', 'Sender_id'],
+              }
+            ]
           }
         ]
-      })
-      return conversations
+      }) as IUser
+      if (!user) throw new Error('Unable to get user');
+
+      return user.Conversations;
     } catch (error) {
-      throw new Error('Unable to get conversations')
+      const typed_error = error as Error
+      throw new Error(`Unable to get conversations : ${typed_error.message}`)
     }
   }
 
@@ -96,7 +114,8 @@ export default class conversation_model {
       })
       return user
     } catch (error) {
-      throw new Error('Unable to find user in conversation')
+      const typed_error = error as Error
+      throw new Error(`Unable to find user in conversation: ${typed_error.message}`)
     }
   }
 }
