@@ -12,13 +12,6 @@ export default class contact {
             Contact_User_id: contact.Contact_User_id
           }
         })
-        ??
-        await Contact.findOne({
-          where: {
-            User_id: contact.Contact_User_id,
-            Contact_User_id: contact.User_id
-          }
-        })
 
       if (existing_contact) {
         throw new Error('Contact already exists');
