@@ -2,11 +2,20 @@ import { type Request, type Response } from 'express'
 import { IConversation, IUser } from '../../types'
 import message from './messages.model'
 import conversation from '../conversations/conversations.model'
+import message_helper from './messages.helper'
 
 export default class message_controller {
   static async create_message(req: Request, res: Response) {
     try {
-      const { Conversation, Message_content } = req.body
+      const { Conversation, Message_content, Nonce } = req.body
+      if (!Conversation) throw new Error('Conversation is required')
+      if (!Message_content) throw new Error('Message_content is required')
+      if (!Nonce) throw new Error('Nonce is required')
+
+      //convert to buffer
+      const Message_content_buffer = message_helper.convert_object_to_buffer(Message_content)
+      const Nonce_buffer = message_helper.convert_object_to_buffer(Nonce)
+
       const this_user = req.user as IUser
       if (!this_user) throw new Error('User is required')
       let this_conversation: IConversation | null = await conversation.find_one_by_id(Conversation.Conversation_id)
@@ -14,10 +23,10 @@ export default class message_controller {
         const members_id = Conversation.Users.map((user: IUser) => user.User_id)
         this_conversation = await conversation.find_one_by_members_id(members_id)
         if (!this_conversation)
-          this_conversation = await conversation.create_one([this_user.User_id])
+          this_conversation = await conversation.create_one([this_user.User_id, ...members_id])
       }
 
-      const new_message = await message.create_one(this_conversation.Conversation_id, this_user.User_id, Message_content)
+      const new_message = await message.create_one(this_conversation.Conversation_id, this_user.User_id, Message_content_buffer, Nonce_buffer)
       res.status(201).json(new_message)
     } catch (error) {
       const typedError = error as Error

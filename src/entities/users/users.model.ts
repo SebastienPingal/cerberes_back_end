@@ -1,6 +1,7 @@
 import { Op } from 'sequelize'
 import { User, Contact, Conversation, UserConversation } from '../../../sequelize/sequelize.models'
 import { IUserCreation, IUserUpdate, IUser, IContact } from '../../types'
+import message_helper from '../messages/messages.helper'
 
 export default class user {
   static async create_one(user: IUserCreation) {
@@ -41,11 +42,27 @@ export default class user {
           }]
       }) as IUser
       if (!userWithLists) throw new Error('User not found')
+      if (userWithLists.encryption_public_key && userWithLists.signing_public_key) {
+        userWithLists.encryption_public_key = message_helper.convert_buffer_to_uint8Array(userWithLists.encryption_public_key as Buffer)
+        userWithLists.signing_public_key = message_helper.convert_buffer_to_uint8Array(userWithLists.signing_public_key as Buffer)
+      }
+
+      userWithLists.contact_list?.forEach((contact: IContact) => {
+        if (!contact.User || !contact.User.encryption_public_key || !contact.User.signing_public_key) return
+        contact.User.encryption_public_key = message_helper.convert_buffer_to_uint8Array(contact.User.encryption_public_key as Buffer)
+        contact.User.signing_public_key = message_helper.convert_buffer_to_uint8Array(contact.User.signing_public_key as Buffer)
+      })
+      userWithLists.demands?.forEach((contact: IContact) => {
+        if (!contact.AddedBy || !contact.AddedBy.encryption_public_key || !contact.AddedBy.signing_public_key) return
+        contact.AddedBy.encryption_public_key = message_helper.convert_buffer_to_uint8Array(contact.AddedBy.encryption_public_key as Buffer)
+        contact.AddedBy.signing_public_key = message_helper.convert_buffer_to_uint8Array(contact.AddedBy.signing_public_key as Buffer)
+      })
 
       delete userWithLists.User_password
       return userWithLists
     } catch (error) {
-      throw new Error('Unable to find user')
+      const typedError = error as Error
+      throw new Error(`Unable to find user with uuid ${uuid} : ${typedError.message}`)
     }
   }
 
@@ -78,12 +95,27 @@ export default class user {
       }) as IUser
       if (!userWithLists) throw new Error('User not found')
 
+      if (userWithLists.encryption_public_key && userWithLists.signing_public_key) {
+        userWithLists.encryption_public_key = message_helper.convert_buffer_to_uint8Array(userWithLists.encryption_public_key as Buffer)
+        userWithLists.signing_public_key = message_helper.convert_buffer_to_uint8Array(userWithLists.signing_public_key as Buffer)
+      }
+      userWithLists.contact_list?.forEach((contact: IContact) => {
+        if (!contact.User || !contact.User.encryption_public_key || !contact.User.signing_public_key) return
+        contact.User.encryption_public_key = message_helper.convert_buffer_to_uint8Array(contact.User.encryption_public_key as Buffer)
+        contact.User.signing_public_key = message_helper.convert_buffer_to_uint8Array(contact.User.signing_public_key as Buffer)
+      })
+      userWithLists.demands?.forEach((contact: IContact) => {
+        if (!contact.AddedBy || !contact.AddedBy.encryption_public_key || !contact.AddedBy.signing_public_key) return
+        contact.AddedBy.encryption_public_key = message_helper.convert_buffer_to_uint8Array(contact.AddedBy.encryption_public_key as Buffer)
+        contact.AddedBy.signing_public_key = message_helper.convert_buffer_to_uint8Array(contact.AddedBy.signing_public_key as Buffer)
+      })
+
       delete userWithLists.User_password
       return userWithLists
     } catch (error) {
       const typedError = error as Error
       console.error(typedError.message)
-      throw new Error('Unable to find user')
+      throw new Error(`Unable to find user with id ${id} : ${typedError.message}`)
     }
   }
 
@@ -117,12 +149,27 @@ export default class user {
 
       if (!userWithLists) throw new Error('User not found')
 
+      if (userWithLists.encryption_public_key && userWithLists.signing_public_key) {
+        userWithLists.encryption_public_key = message_helper.convert_buffer_to_uint8Array(userWithLists.encryption_public_key as Buffer)
+        userWithLists.signing_public_key = message_helper.convert_buffer_to_uint8Array(userWithLists.signing_public_key as Buffer)
+      }
+      userWithLists.contact_list?.forEach((contact: IContact) => {
+        if (!contact.User || !contact.User.encryption_public_key || !contact.User.signing_public_key) return
+        contact.User.encryption_public_key = message_helper.convert_buffer_to_uint8Array(contact.User.encryption_public_key as Buffer)
+        contact.User.signing_public_key = message_helper.convert_buffer_to_uint8Array(contact.User.signing_public_key as Buffer)
+      })
+      userWithLists.demands?.forEach((contact: IContact) => {
+        if (!contact.AddedBy || !contact.AddedBy.encryption_public_key || !contact.AddedBy.signing_public_key) return
+        contact.AddedBy.encryption_public_key = message_helper.convert_buffer_to_uint8Array(contact.AddedBy.encryption_public_key as Buffer)
+        contact.AddedBy.signing_public_key = message_helper.convert_buffer_to_uint8Array(contact.AddedBy.signing_public_key as Buffer)
+      })
+
       delete userWithLists.User_password
       return userWithLists
     } catch (error) {
       const typedError = error as Error
       console.error(typedError.message)
-      throw new Error('Unable to find user')
+      throw new Error(`Unable to find user with email ${email} : ${typedError.message}`)
     }
   }
 
@@ -177,9 +224,19 @@ export default class user {
         throw new Error('Invalid input')
       }
 
+      const encryption_public_key_array = Object.values(encryption_public_key)
+      const encryption_public_key_uint8 = new Uint8Array(encryption_public_key_array)
+      const buffered_encryption_public_key = Buffer.from(encryption_public_key_uint8)
+      const signing_public_key_array = Object.values(signing_public_key)
+      const signing_public_key_uint8 = new Uint8Array(signing_public_key_array)
+      const buffered_signing_public_key = Buffer.from(signing_public_key_uint8)
+
       await User.update(
-        { encryption_public_key, signing_public_key },
-        { where: { User_id: user_to_update.User_id }}
+        {
+          encryption_public_key: buffered_encryption_public_key,
+          signing_public_key: buffered_signing_public_key
+        },
+        { where: { User_id: user_to_update.User_id } }
       )
 
       let updated_user = {} as IUser
@@ -188,7 +245,6 @@ export default class user {
           if (!response) throw new Error('Could not find user after update')
           updated_user = response.dataValues as IUser
         })
-      console.log('updated_user', updated_user)
 
       return this.find_one_by_id(updated_user.User_id)
 

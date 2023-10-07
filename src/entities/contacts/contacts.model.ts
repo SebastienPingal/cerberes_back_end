@@ -38,9 +38,10 @@ export default class contact {
         },
         include: [{
           model: User,
-          attributes: ['User_name', 'PGP_PublicKey']
+          attributes: ['User_name', 'encryption_public_key', 'signing_public_key']
         }]
       });
+
       return contacts;
     } catch (error) {
       throw new Error('Unable to find contacts');

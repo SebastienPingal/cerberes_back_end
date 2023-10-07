@@ -2,12 +2,13 @@ import { Message } from '../../../sequelize/sequelize.models'
 import { IMessage } from '../../types'
 
 export default class message_model {
-  static async create_one(Conversation_id: number, Sender_id: number, Message_content: string): Promise<IMessage> {
+  static async create_one(Conversation_id: number, Sender_id: number, Message_content: Buffer, Nonce: Buffer): Promise<IMessage> {
     try {
       return await Message.create({
         Conversation_id,
         Sender_id,
         Message_content,
+        Nonce,
       })
     } catch (error) {
       const typedError = error as Error

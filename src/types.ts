@@ -6,10 +6,10 @@ export interface IUser {
   User_email: string;
   User_password?: string;
   User_contact_uuid?: string;
-  encryption_public_key?: Uint8Array;
-  signing_public_key?: Uint8Array;
+  encryption_public_key?: Buffer | Uint8Array;
+  signing_public_key?: Buffer | Uint8Array;
   contact_list?: IContact[];
-  demand_list?: IContact[];
+  demands?: IContact[];
   AddedContacts?: IContact[];
   AddedByOthers?: IContact[];
   Conversations?: IConversation[];
@@ -43,6 +43,6 @@ export interface IMessage {
   Message_id?: number;
   Conversation_id: number;
   Sender_id: number;
-  Message_content: string;
+  Message_content: Buffer|Uint8Array;
+  Nonce: Buffer|Uint8Array;
 }
-

@@ -23,8 +23,8 @@ class User extends Model<IUser, IUserCreation> implements IUser {
   User_email!: string
   User_password!: string
   User_contact_uuid?: string
-  encryption_public_key?: Uint8Array
-  signing_public_key?: Uint8Array
+  encryption_public_key?: Buffer
+  signing_public_key?: Buffer
 }
 
 User.init(
@@ -51,11 +51,11 @@ User.init(
       allowNull: false,
     },
     encryption_public_key: {
-      type: DataTypes.TEXT,
+      type: DataTypes.BLOB,
       allowNull: true,
     },
     signing_public_key: {
-      type: DataTypes.TEXT,
+      type: DataTypes.BLOB,
       allowNull: true,
     }
   },
@@ -155,7 +155,8 @@ class Message extends Model<IMessage> implements IMessage {
   Message_id!: number
   Conversation_id!: number
   Sender_id!: number
-  Message_content!: string
+  Message_content!: Buffer
+  Nonce!: Buffer
 }
 
 Message.init(
@@ -180,9 +181,13 @@ Message.init(
       },
     },
     Message_content: {
-      type: DataTypes.TEXT,
+      type: DataTypes.BLOB,
       allowNull: false,
-    }
+    },
+    Nonce: {
+      type: DataTypes.BLOB,
+      allowNull: false,
+    },
   },
   {
     sequelize,

@@ -1,6 +1,8 @@
 import { User, Message, Conversation, UserConversation } from '../../../sequelize/sequelize.models'
 import { IUser } from '../../types'
 import { Op } from 'sequelize'
+import message_helper from '../messages/messages.helper'
+
 export default class conversation_model {
   static async create_one(members_id: number[]) {
     try {
@@ -49,13 +51,42 @@ export default class conversation_model {
                 model: Message,
                 as: 'Messages',
                 where: { Sender_id: { [Op.ne]: user_id } },
-                attributes: ['Message_id', 'Message_content', 'createdAt', 'Sender_id'],
+                attributes: ['Message_id', 'Message_content', 'Nonce', 'createdAt', 'Sender_id'],
               }
             ]
           }
         ]
       }) as IUser
       if (!user) throw new Error('Unable to get user');
+      if (!user.Conversations) {
+        console.error('no conversations')
+        return []
+      }
+      
+      user.Conversations.forEach(conv => {
+        if(!conv.Users || !conv.Users.length) return
+        conv.Users.forEach(user => {
+          if (!user.encryption_public_key) return
+          if (user.encryption_public_key instanceof Buffer)
+            user.encryption_public_key = message_helper.convert_buffer_to_uint8Array(user.encryption_public_key);
+
+          if (!user.signing_public_key) return
+          if (user.signing_public_key instanceof Buffer)
+            user.signing_public_key = message_helper.convert_buffer_to_uint8Array(user.signing_public_key);
+        })
+
+        if(!conv.Messages || !conv.Messages.length) return
+        conv.Messages.forEach(msg => {
+          console.log("contenu", msg.Message_content)
+          if (!msg.Message_content) return
+          if (msg.Message_content instanceof Buffer)
+            msg.Message_content = message_helper.convert_buffer_to_uint8Array(msg.Message_content);
+
+          if (!msg.Nonce) return
+          if (msg.Nonce instanceof Buffer)
+            msg.Nonce = message_helper.convert_buffer_to_uint8Array(msg.Nonce);
+        })
+      })
 
       return user.Conversations;
     } catch (error) {
