@@ -2,7 +2,6 @@ import { type Request, type Response } from 'express'
 import conversation from './conversations.model'
 import user from '../users/users.model'
 import type { IConversation, IUser } from '../../types'
-import user_conversation from '../user_conversations/user_conversation.model'
 
 export default class conversation_controller {
   static async get_conversations_with_new_messages(req: Request, res: Response) {
