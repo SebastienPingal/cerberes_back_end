@@ -224,12 +224,8 @@ export default class user {
         throw new Error('Invalid input')
       }
 
-      const encryption_public_key_array = Object.values(encryption_public_key)
-      const encryption_public_key_uint8 = new Uint8Array(encryption_public_key_array)
-      const buffered_encryption_public_key = Buffer.from(encryption_public_key_uint8)
-      const signing_public_key_array = Object.values(signing_public_key)
-      const signing_public_key_uint8 = new Uint8Array(signing_public_key_array)
-      const buffered_signing_public_key = Buffer.from(signing_public_key_uint8)
+      const buffered_encryption_public_key = message_helper.convert_object_to_buffer(encryption_public_key)
+      const buffered_signing_public_key = message_helper.convert_object_to_buffer(signing_public_key)
 
       await User.update(
         {

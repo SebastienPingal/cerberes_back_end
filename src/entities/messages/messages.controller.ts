@@ -13,20 +13,21 @@ export default class message_controller {
       if (!Nonce) throw new Error('Nonce is required')
 
       //convert to buffer
-      const Message_content_buffer = message_helper.convert_object_to_buffer(Message_content)
-      const Nonce_buffer = message_helper.convert_object_to_buffer(Nonce)
-
       const this_user = req.user as IUser
       if (!this_user) throw new Error('User is required')
-      let this_conversation: IConversation | null = await conversation.find_one_by_id(Conversation.Conversation_id)
+
+      let this_conversation: IConversation | null = null
+
+      if (Conversation.Conversation_id !== 0) this_conversation = await conversation.find_one_by_id(Conversation.Conversation_id)
       if (!this_conversation) {
         const members_id = Conversation.Users.map((user: IUser) => user.User_id)
-        this_conversation = await conversation.find_one_by_members_id(members_id)
+        members_id.push(this_user.User_id)
+        this_conversation = await conversation.find_one_by_members_id(members_id) ?? null
         if (!this_conversation)
-          this_conversation = await conversation.create_one([this_user.User_id, ...members_id])
+          this_conversation = await conversation.create_one(members_id)
       }
 
-      const new_message = await message.create_one(this_conversation.Conversation_id, this_user.User_id, Message_content_buffer, Nonce_buffer)
+      const new_message = await message.create_one(this_conversation.Conversation_id, this_user.User_id, Message_content, Nonce)
       res.status(201).json(new_message)
     } catch (error) {
       const typedError = error as Error
