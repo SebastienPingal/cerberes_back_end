@@ -57,6 +57,35 @@ pnpm build
 pnpm start
 ```
 
+## ☁️ AWS Deployment with Terraform
+
+This project can be automatically deployed to AWS using our CI/CD pipeline and Terraform. 
+
+### Prerequisites
+
+- AWS account with appropriate permissions
+- GitHub repository with GitHub Actions enabled
+- Required GitHub Secrets configured (see below)
+
+### Deployment Process
+
+1. Push your changes to the master branch
+2. The CI pipeline checks code quality and builds the application
+3. The CD pipeline provisions AWS infrastructure using Terraform
+4. Application is deployed to an EC2 instance with a PostgreSQL RDS
+
+### Required GitHub Secrets
+
+- `AWS_ACCESS_KEY_ID`: Your AWS access key
+- `AWS_SECRET_ACCESS_KEY`: Your AWS secret key
+- `AWS_REGION`: AWS region for deployment (e.g., us-east-1)
+- `DB_USERNAME`: Database username
+- `DB_PASSWORD`: Database password
+- `SSH_KEY_NAME`: Name of the SSH key pair in AWS
+- `EC2_SSH_PRIVATE_KEY`: Private SSH key content for connecting to EC2
+
+For more details, see the [Terraform README](terraform/README.md).
+
 ## Usage
 
 Provide information about how to use your app. You may want to include API routes here.

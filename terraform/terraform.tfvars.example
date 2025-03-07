@@ -1,0 +1,7 @@
+aws_region      = "us-east-1"
+app_name        = "cerberes"
+db_username     = "postgres"
+db_password     = "YourStrongPasswordHere"
+ssh_key_name    = "your-ssh-key-name"
+ec2_instance_type = "t2.micro"
+db_instance_class = "db.t3.micro" 

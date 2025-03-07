@@ -1,0 +1,52 @@
+name: Raspberry Pi Deployment Pipeline
+
+on:
+  push:
+    branches: [ master ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Use Node.js
+        uses: actions/setup-node@v2
+        with:
+          node-version: 16
+
+      - uses: pnpm/action-setup@v2
+        with:
+          version: 8
+
+      - name: Build
+        run: pnpm install && pnpm run build
+
+      - name: Archive files
+        run: tar -czvf package.tar.gz dist/ package.json
+
+      - name: Push archive to server
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.RASPI_SSH_HOST }}
+          username: ${{ secrets.RASPI_SSH_USERNAME }}
+          password: ${{ secrets.RASPI_SSH_KEY }}
+          port: ${{ secrets.RASPI_SSH_PORT }}
+          source: "package.tar.gz"
+          target: "Documents/PROG/cerberes/back_end"
+
+      - name: Unpack files on server and run it
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.RASPI_SSH_HOST }}
+          username: ${{ secrets.RASPI_SSH_USERNAME }}
+          password: ${{ secrets.RASPI_SSH_KEY }}
+          port: ${{ secrets.RASPI_SSH_PORT }}
+          script: |
+            set -e
+            cd Documents/PROG/cerberes/back_end
+            tar -xzvf package.tar.gz
+            pnpm install
+            cd
+            pm2 restart pm2.config.js 

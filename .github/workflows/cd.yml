@@ -1,52 +1,99 @@
-name: Raspberry Pi Deployment Pipeline
+name: AWS Deployment Pipeline
 
 on:
   push:
     branches: [ master ]
+  workflow_run:
+    workflows: ["CI Pipeline"]
+    branches: [master]
+    types:
+      - completed
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'push' }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
-      - name: Use Node.js
-        uses: actions/setup-node@v2
+      - name: Download build artifact
+        uses: actions/download-artifact@v3
         with:
-          node-version: 16
+          name: build-artifact
+          path: .
 
-      - uses: pnpm/action-setup@v2
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
         with:
-          version: 8
+          terraform_version: 1.5.0
 
-      - name: Build
-        run: pnpm install && pnpm run build
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
 
-      - name: Archive files
-        run: tar -czvf package.tar.gz dist/ package.json
+      - name: Create terraform.tfvars
+        run: |
+          cat > terraform/terraform.tfvars << EOF
+          aws_region      = "${{ secrets.AWS_REGION }}"
+          app_name        = "cerberes"
+          db_username     = "${{ secrets.DB_USERNAME }}"
+          db_password     = "${{ secrets.DB_PASSWORD }}"
+          ssh_key_name    = "${{ secrets.SSH_KEY_NAME }}"
+          ec2_instance_type = "t2.micro"
+          db_instance_class = "db.t3.micro"
+          EOF
 
-      - name: Push archive to server
+      - name: Terraform Init
+        working-directory: ./terraform
+        run: terraform init
+
+      - name: Terraform Plan
+        working-directory: ./terraform
+        run: terraform plan -out=tfplan
+
+      - name: Terraform Apply
+        working-directory: ./terraform
+        run: terraform apply -auto-approve tfplan
+
+      - name: Get EC2 public IP
+        working-directory: ./terraform
+        id: ec2_ip
+        run: |
+          echo "EC2_IP=$(terraform output -raw public_ip)" >> $GITHUB_ENV
+
+      - name: Deploy application to EC2
         uses: appleboy/scp-action@master
         with:
-          host: ${{ secrets.RASPI_SSH_HOST }}
-          username: ${{ secrets.RASPI_SSH_USERNAME }}
-          password: ${{ secrets.RASPI_SSH_KEY }}
-          port: ${{ secrets.RASPI_SSH_PORT }}
-          source: "package.tar.gz"
-          target: "Documents/PROG/cerberes/back_end"
+          host: ${{ env.EC2_IP }}
+          username: ec2-user
+          key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+          source: "dist/,package.json,pnpm-lock.yaml,.env"
+          target: "/home/ec2-user/app"
 
-      - name: Unpack files on server and run it
+      - name: Configure and start application
         uses: appleboy/ssh-action@master
         with:
-          host: ${{ secrets.RASPI_SSH_HOST }}
-          username: ${{ secrets.RASPI_SSH_USERNAME }}
-          password: ${{ secrets.RASPI_SSH_KEY }}
-          port: ${{ secrets.RASPI_SSH_PORT }}
+          host: ${{ env.EC2_IP }}
+          username: ec2-user
+          key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
           script: |
-            set -e
-            cd Documents/PROG/cerberes/back_end
-            tar -xzvf package.tar.gz
-            pnpm install
-            cd
-            pm2 restart pm2.config.js
+            cd /home/ec2-user/app
+            
+            # Add production environment variables
+            cat > .env << EOF
+            NODE_ENV=production
+            DATABASE_URL=postgres://${{ secrets.DB_USERNAME }}:${{ secrets.DB_PASSWORD }}@$(terraform output -raw db_endpoint)/cerberes
+            PORT=3000
+            EOF
+            
+            # Install dependencies and start with PM2
+            pnpm install --prod
+            pm2 stop cerberes || echo "App not running"
+            pm2 start dist/src/server.js --name cerberes
+            pm2 save
+            
+            echo "🚀 Deployment completed"

@@ -1,0 +1,32 @@
+name : Ci node
+
+on:
+    push:
+        branches: [ master ]
+    pull_request:
+        branches: [ master ]
+
+jobs:
+    lint_typecheck:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v2
+            - uses: pnpm/action-setup@v2
+              with:
+                  version: 8.6.0
+            - name: Install dependencies
+              run: pnpm install
+            - name: Run lint
+              run: pnpm lint
+
+    # test:
+    #     runs-on: ubuntu-latest
+    #     steps:
+    #         - uses: actions/checkout@v2
+    #         - uses: pnpm/action-setup@v2
+    #           with:
+    #                 version: 8.6.0
+    #         - name: Install dependencies
+    #           run: pnpm install
+    #         - name: run tests
+    #           run: pnpm test 
