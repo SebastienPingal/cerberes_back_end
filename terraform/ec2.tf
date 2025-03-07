@@ -39,6 +39,11 @@ resource "aws_security_group" "ec2_sg" {
   tags = {
     Name = "${var.app_name}-ec2-sg"
   }
+  
+  # Allow replacement of security group if it exists
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 # EC2 Instance for hosting the application
@@ -69,18 +74,21 @@ resource "aws_instance" "app_instance" {
   tags = {
     Name = "${var.app_name}-instance"
   }
-}
-
-# Elastic IP for EC2 instance
-resource "aws_eip" "app_eip" {
-  instance = aws_instance.app_instance.id
-  domain   = "vpc"
-  tags = {
-    Name = "${var.app_name}-eip"
+  
+  # Prevent unnecessary replacement of the instance
+  lifecycle {
+    ignore_changes = [
+      ami,              # Allow AMI updates without recreation
+      user_data,        # Allow user_data changes without recreation
+      tags              # Allow tag changes without recreation
+    ]
   }
 }
 
+# REMOVED: Elastic IP for EC2 instance (to stay within free tier)
+# Using the auto-assigned public IP instead
+
 output "public_ip" {
   description = "Public IP address of the EC2 instance"
-  value       = aws_eip.app_eip.public_ip
+  value       = aws_instance.app_instance.public_ip
 } 
