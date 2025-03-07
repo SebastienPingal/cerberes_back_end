@@ -17,6 +17,27 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
+      # Debug step to check secrets are available (values will be masked)
+      - name: Debug Secret Presence
+        run: |
+          if [ -n "${{ secrets.AWS_ACCESS_KEY_ID }}" ]; then 
+            echo "AWS_ACCESS_KEY_ID is set ✅"
+          else
+            echo "AWS_ACCESS_KEY_ID is NOT set ❌"
+          fi
+          
+          if [ -n "${{ secrets.AWS_SECRET_ACCESS_KEY }}" ]; then 
+            echo "AWS_SECRET_ACCESS_KEY is set ✅"
+          else
+            echo "AWS_SECRET_ACCESS_KEY is NOT set ❌"  
+          fi
+          
+          if [ -n "${{ secrets.AWS_REGION }}" ]; then 
+            echo "AWS_REGION is set ✅"
+          else
+            echo "AWS_REGION is NOT set ❌"
+          fi
+
       # Build the app directly instead of trying to download an artifact
       - name: Setup pnpm
         uses: pnpm/action-setup@v2

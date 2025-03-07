@@ -43,7 +43,7 @@ resource "aws_security_group" "ec2_sg" {
 
 # EC2 Instance for hosting the application
 resource "aws_instance" "app_instance" {
-  ami                    = "ami-0c7217cdde317cfec"  # Amazon Linux 2023 AMI for us-east-1 (update for your region)
+  ami                    = "ami-01dd271720c1ba44f"  # Amazon Linux 2023 AMI for eu-west-1 (Ireland)
   instance_type          = var.ec2_instance_type
   key_name               = var.ssh_key_name
   subnet_id              = aws_subnet.public_subnet.id
