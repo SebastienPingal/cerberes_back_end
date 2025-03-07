@@ -50,7 +50,7 @@ resource "aws_db_instance" "postgres" {
   engine                 = "postgres"
   engine_version         = "15.4"  # Available version in eu-west-1
   instance_class         = var.db_instance_class
-  allocated_storage      = 20
+  allocated_storage      = 10      # Reduced to 10GB to stay well within free tier
   storage_type           = "gp2"
   db_name                = "cerberes"
   username               = var.db_username
@@ -59,7 +59,11 @@ resource "aws_db_instance" "postgres" {
   vpc_security_group_ids = [aws_security_group.db_sg.id]
   publicly_accessible    = false
   skip_final_snapshot    = true
-  backup_retention_period = 7
+  backup_retention_period = 1      # Reduced to 1 day to minimize storage usage
+  
+  # Free tier optimizations
+  multi_az               = false   # Multi-AZ is not free tier eligible
+  performance_insights_enabled = false # Performance Insights is not free tier eligible
   
   tags = {
     Name = "${var.app_name}-db"

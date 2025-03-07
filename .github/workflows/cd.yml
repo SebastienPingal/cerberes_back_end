@@ -131,6 +131,14 @@ jobs:
         id: ec2_ip
         run: |
           echo "EC2_IP=$(terraform output -raw public_ip)" >> $GITHUB_ENV
+          echo "🖥️ EC2 instance public IP: $(terraform output -raw public_ip)"
+
+      # Add a delay to ensure EC2 instance is fully initialized
+      - name: Wait for EC2 instance to initialize
+        if: steps.terraform-apply.outcome == 'success' && env.EC2_IP != ''
+        run: |
+          echo "⏳ Waiting 60 seconds for EC2 instance to fully initialize..."
+          sleep 60
 
       - name: Deploy application to EC2
         if: steps.terraform-apply.outcome == 'success' && env.EC2_IP != ''

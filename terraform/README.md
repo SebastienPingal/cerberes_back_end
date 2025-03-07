@@ -2,13 +2,24 @@
 
 This directory contains Terraform configurations to deploy the Cerberes application to AWS.
 
-## 🏗️ Resources Created
+## ��️ Resources Created (Free Tier Compatible)
 
-- VPC with public and private subnets
-- EC2 instance (t2.micro) for hosting the Node.js application
-- RDS PostgreSQL database (db.t3.micro)
-- Security groups and network configurations
-- Elastic IP for the EC2 instance
+- VPC with public and private subnets (free)
+- EC2 t2.micro instance for hosting the Node.js application (free tier eligible - 750 hours/month)
+- RDS PostgreSQL db.t3.micro database (free tier eligible - 750 hours/month)
+- Security groups and network configurations (free)
+- Auto-assigned public IP (free) instead of Elastic IP
+
+## 💰 AWS Free Tier Considerations
+
+This deployment is designed to stay within AWS Free Tier limits:
+
+- **EC2**: t2.micro instance (free for 12 months, 750 hours/month)
+- **RDS**: db.t3.micro with 10GB storage (free for 12 months, 750 hours/month)
+- **Storage**: Total 10GB for RDS (free tier includes 20GB total)
+- **Data Transfer**: Keep in mind the 1GB/month free outbound data limit
+
+**Important**: Free tier is only available for 12 months from AWS account creation.
 
 ## 📋 Prerequisites
 
@@ -101,6 +112,15 @@ For production use, it's recommended to use remote state storage:
    ```bash
    terraform init
    ```
+
+## ⚠️ Cost Management
+
+To avoid unexpected charges:
+
+1. **Monitor Usage**: Regularly check the AWS Billing dashboard
+2. **Set Budgets**: Create AWS budget alerts to notify you of spending
+3. **Cleanup**: When not in use, consider destroying resources with `terraform destroy`
+4. **Data Transfer**: Be mindful of outbound data transfer (>1GB/month incurs charges)
 
 ## 🧪 Troubleshooting
 
