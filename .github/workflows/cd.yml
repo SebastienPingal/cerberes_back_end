@@ -84,21 +84,56 @@ jobs:
         working-directory: ./terraform
         run: terraform init
 
+      - name: Check for existing resources
+        id: check-resources
+        working-directory: ./terraform
+        continue-on-error: true
+        run: |
+          # Check if DB subnet group exists
+          if aws rds describe-db-subnet-groups --db-subnet-group-name cerberes-db-subnet-group &> /dev/null; then
+            echo "DB_SUBNET_GROUP_EXISTS=true" >> $GITHUB_ENV
+            echo "✅ DB Subnet Group exists - will handle in Terraform"
+          else
+            echo "DB_SUBNET_GROUP_EXISTS=false" >> $GITHUB_ENV
+            echo "🆕 DB Subnet Group does not exist"
+          fi
+          
+          # Check if DB instance exists
+          if aws rds describe-db-instances --db-instance-identifier cerberes-db &> /dev/null; then
+            echo "DB_INSTANCE_EXISTS=true" >> $GITHUB_ENV
+            echo "✅ DB Instance exists - will handle in Terraform"
+          else
+            echo "DB_INSTANCE_EXISTS=false" >> $GITHUB_ENV
+            echo "🆕 DB Instance does not exist"
+          fi
+
+      - name: Import existing resources
+        working-directory: ./terraform
+        if: env.DB_SUBNET_GROUP_EXISTS == 'true'
+        continue-on-error: true
+        run: |
+          # Create Terraform state entry for existing DB subnet group
+          echo "🔄 Importing existing DB subnet group into Terraform state..."
+          terraform import aws_db_subnet_group.db_subnet_group cerberes-db-subnet-group
+
       - name: Terraform Plan
         working-directory: ./terraform
         run: terraform plan -out=tfplan
 
       - name: Terraform Apply
+        id: terraform-apply
         working-directory: ./terraform
         run: terraform apply -auto-approve tfplan
 
       - name: Get EC2 public IP
+        if: steps.terraform-apply.outcome == 'success'
         working-directory: ./terraform
         id: ec2_ip
         run: |
           echo "EC2_IP=$(terraform output -raw public_ip)" >> $GITHUB_ENV
 
       - name: Deploy application to EC2
+        if: steps.terraform-apply.outcome == 'success' && env.EC2_IP != ''
         uses: appleboy/scp-action@master
         with:
           host: ${{ env.EC2_IP }}
@@ -108,6 +143,7 @@ jobs:
           target: "/home/ec2-user/app"
 
       - name: Configure and start application
+        if: steps.terraform-apply.outcome == 'success' && env.EC2_IP != ''
         uses: appleboy/ssh-action@master
         with:
           host: ${{ env.EC2_IP }}
@@ -130,3 +166,11 @@ jobs:
             pm2 save
             
             echo "🚀 Deployment completed"
+            
+      - name: Cleanup on failure
+        if: failure() && steps.terraform-apply.outcome == 'failure'
+        working-directory: ./terraform
+        run: |
+          echo "🧹 Cleaning up failed deployment..."
+          terraform destroy -auto-approve
+          echo "♻️ Resources cleaned up."

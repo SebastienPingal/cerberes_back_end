@@ -26,11 +26,11 @@ resource "aws_security_group" "db_sg" {
 
 # DB Subnet Group
 resource "aws_db_subnet_group" "db_subnet_group" {
-  name       = "${var.app_name}-db-subnet-group"
+  name       = "${var.app_name}-db-subnet-group-new"
   subnet_ids = [aws_subnet.private_subnet_1.id, aws_subnet.private_subnet_2.id]
 
   tags = {
-    Name = "${var.app_name}-db-subnet-group"
+    Name = "${var.app_name}-db-subnet-group-new"
   }
 }
 
