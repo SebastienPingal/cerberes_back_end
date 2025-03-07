@@ -84,6 +84,8 @@ jobs:
         working-directory: ./terraform
         run: terraform init
 
+      # Check for existing resources but don't try to import them
+      # We're using a new resource name strategy instead
       - name: Check for existing resources
         id: check-resources
         working-directory: ./terraform
@@ -91,30 +93,19 @@ jobs:
         run: |
           # Check if DB subnet group exists
           if aws rds describe-db-subnet-groups --db-subnet-group-name cerberes-db-subnet-group &> /dev/null; then
-            echo "DB_SUBNET_GROUP_EXISTS=true" >> $GITHUB_ENV
-            echo "✅ DB Subnet Group exists - will handle in Terraform"
+            echo "⚠️ DB Subnet Group exists - using new name to avoid conflict"
           else
-            echo "DB_SUBNET_GROUP_EXISTS=false" >> $GITHUB_ENV
             echo "🆕 DB Subnet Group does not exist"
           fi
           
           # Check if DB instance exists
           if aws rds describe-db-instances --db-instance-identifier cerberes-db &> /dev/null; then
-            echo "DB_INSTANCE_EXISTS=true" >> $GITHUB_ENV
-            echo "✅ DB Instance exists - will handle in Terraform"
+            echo "⚠️ DB Instance exists - may need manual cleanup"
           else
-            echo "DB_INSTANCE_EXISTS=false" >> $GITHUB_ENV
             echo "🆕 DB Instance does not exist"
           fi
 
-      - name: Import existing resources
-        working-directory: ./terraform
-        if: env.DB_SUBNET_GROUP_EXISTS == 'true'
-        continue-on-error: true
-        run: |
-          # Create Terraform state entry for existing DB subnet group
-          echo "🔄 Importing existing DB subnet group into Terraform state..."
-          terraform import aws_db_subnet_group.db_subnet_group cerberes-db-subnet-group
+      # Removed the import step since we're using a new resource name strategy
 
       - name: Terraform Plan
         working-directory: ./terraform

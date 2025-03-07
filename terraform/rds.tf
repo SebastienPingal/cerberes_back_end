@@ -29,13 +29,13 @@ resource "aws_security_group" "db_sg" {
   }
 }
 
-# DB Subnet Group
+# DB Subnet Group with timestamp suffix to avoid conflicts
 resource "aws_db_subnet_group" "db_subnet_group" {
-  name       = "${var.app_name}-db-subnet-group"  # Use the original name for proper import
+  name       = "${var.app_name}-db-subnet-group-new"  # Changed name to avoid conflict
   subnet_ids = [aws_subnet.private_subnet_1.id, aws_subnet.private_subnet_2.id]
 
   tags = {
-    Name = "${var.app_name}-db-subnet-group"
+    Name = "${var.app_name}-db-subnet-group-new"
   }
 
   # Prevent recreation if attributes change but resource exists
