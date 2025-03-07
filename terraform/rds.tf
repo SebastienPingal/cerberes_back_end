@@ -48,7 +48,7 @@ resource "aws_db_subnet_group" "db_subnet_group" {
 resource "aws_db_instance" "postgres" {
   identifier             = "${var.app_name}-db"
   engine                 = "postgres"
-  engine_version         = "15.4"  # Available version in eu-west-1
+  engine_version         = "14.7"  # Updated to a widely available version
   instance_class         = var.db_instance_class
   allocated_storage      = 10      # Reduced to 10GB to stay well within free tier
   storage_type           = "gp2"
