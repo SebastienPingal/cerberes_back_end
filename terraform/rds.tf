@@ -22,15 +22,25 @@ resource "aws_security_group" "db_sg" {
   tags = {
     Name = "${var.app_name}-db-sg"
   }
+
+  # Allow replacement of security group if it exists
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 # DB Subnet Group
 resource "aws_db_subnet_group" "db_subnet_group" {
-  name       = "${var.app_name}-db-subnet-group-new"
+  name       = "${var.app_name}-db-subnet-group"  # Use the original name for proper import
   subnet_ids = [aws_subnet.private_subnet_1.id, aws_subnet.private_subnet_2.id]
 
   tags = {
-    Name = "${var.app_name}-db-subnet-group-new"
+    Name = "${var.app_name}-db-subnet-group"
+  }
+
+  # Prevent recreation if attributes change but resource exists
+  lifecycle {
+    ignore_changes = [subnet_ids]
   }
 }
 
@@ -38,7 +48,7 @@ resource "aws_db_subnet_group" "db_subnet_group" {
 resource "aws_db_instance" "postgres" {
   identifier             = "${var.app_name}-db"
   engine                 = "postgres"
-  engine_version         = "15.4"
+  engine_version         = "15.4"  # Available version in eu-west-1
   instance_class         = var.db_instance_class
   allocated_storage      = 20
   storage_type           = "gp2"
@@ -53,6 +63,14 @@ resource "aws_db_instance" "postgres" {
   
   tags = {
     Name = "${var.app_name}-db"
+  }
+
+  # Prevent recreation if certain attributes change
+  lifecycle {
+    ignore_changes = [
+      snapshot_identifier,
+      password   # Allow password updates without recreation
+    ]
   }
 }
 
