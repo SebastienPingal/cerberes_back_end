@@ -18,20 +18,44 @@ Cerberes is a secure, encrypted chat application. It uses PGP encryption to ensu
 - Sequelize (ORM)
 - PostgreSQL
 
-## Getting Started
+## 🐳 Running with Docker
 
-### Prerequisites
+The easiest way to run the application is using Docker Compose:
 
-- Node.js
-- PostgreSQL
+```bash
+# Build and start the containers
+docker-compose up -d
 
-### Installation
+# View logs
+docker-compose logs -f
 
-1. Clone the repository: `git clone https://github.com/SebastienPingal/cerberes_back_end.git`
-2. Navigate to the project directory: `cd cerberes_back_end`
-3. Install dependencies: `npm install`
-4. Create a `.env` file and add your environment variables.
-5. Run the application: `npm start`
+# Stop the containers
+docker-compose down
+```
+
+This will start both the application and PostgreSQL database with all the necessary environment variables configured.
+
+## 🚀 Running Locally
+
+If you prefer to run the application locally:
+
+1. Make sure you have PostgreSQL installed and running
+2. Copy `.env.example` to `.env` and update the values if needed
+3. Install dependencies:
+   ```bash
+   pnpm install
+   ```
+4. Start the development server:
+   ```bash
+   pnpm dev
+   ```
+
+## 📦 Build for Production
+
+```bash
+pnpm build
+pnpm start
+```
 
 ## Usage
 

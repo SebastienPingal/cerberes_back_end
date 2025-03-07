@@ -1,5 +1,5 @@
 import { type Request, type Response } from 'express'
-import bcrypt from 'bcrypt'
+import bcrypt from 'bcryptjs'
 import type { IUserCreation, IUser } from '../../types'
 import auth_helper from './auth.helper'
 import user from '../users/users.model'
