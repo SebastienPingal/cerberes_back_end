@@ -48,7 +48,7 @@ resource "aws_db_subnet_group" "db_subnet_group" {
 resource "aws_db_instance" "postgres" {
   identifier             = "${var.app_name}-db"
   engine                 = "postgres"
-  engine_version         = "14.7"  # Updated to a widely available version
+  # Let AWS choose the default version by not specifying engine_version
   instance_class         = var.db_instance_class
   allocated_storage      = 10      # Reduced to 10GB to stay well within free tier
   storage_type           = "gp2"
@@ -73,7 +73,8 @@ resource "aws_db_instance" "postgres" {
   lifecycle {
     ignore_changes = [
       snapshot_identifier,
-      password   # Allow password updates without recreation
+      password,   # Allow password updates without recreation
+      engine_version # Allow version updates without recreation
     ]
   }
 }
