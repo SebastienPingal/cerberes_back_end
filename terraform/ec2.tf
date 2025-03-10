@@ -2,7 +2,7 @@
 resource "aws_security_group" "ec2_sg" {
   name        = "${var.app_name}-ec2-sg"
   description = "Security group for EC2 instance"
-  vpc_id      = aws_vpc.app_vpc.id
+  vpc_id      = local.vpc_id
 
   # SSH access
   ingress {
@@ -79,16 +79,21 @@ locals {
   final_ip = local.existing_ip != "" ? local.existing_ip : (
     local.new_instance_ip != "" ? local.new_instance_ip : "no-ip-available"
   )
+  
+  # Get the subnet ID to use
+  subnet_id = length(data.aws_subnets.public) > 0 && length(data.aws_subnets.public[0].ids) > 0 ? 
+              data.aws_subnets.public[0].ids[0] : 
+              length(aws_subnet.public_subnet) > 0 ? aws_subnet.public_subnet[0].id : null
 }
 
 # EC2 Instance for hosting the application - only created if it doesn't already exist
 resource "aws_instance" "app_instance" {
-  # Only create if no existing instances are found
-  count                  = local.create_instance ? 1 : 0
+  # Only create if no existing instances are found and we have a subnet
+  count                  = local.create_instance && local.subnet_id != null ? 1 : 0
   ami                    = "ami-01dd271720c1ba44f"  # Amazon Linux 2023 AMI for eu-west-1 (Ireland)
   instance_type          = var.ec2_instance_type
   key_name               = var.ssh_key_name
-  subnet_id              = aws_subnet.public_subnet.id
+  subnet_id              = local.subnet_id
   vpc_security_group_ids = [aws_security_group.ec2_sg.id]
 
   user_data = <<-EOF

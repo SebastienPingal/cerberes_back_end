@@ -86,6 +86,19 @@ jobs:
       - name: Check for existing resources
         id: check-resources
         run: |
+          # Check if we have existing VPCs
+          VPC_COUNT=$(aws ec2 describe-vpcs --query "length(Vpcs)" --output text)
+          
+          if [ "$VPC_COUNT" -gt "0" ]; then
+            echo "VPC_EXISTS=true" >> $GITHUB_ENV
+            echo "✅ VPCs exist - will use existing ones"
+            # Modify the Terraform code to use existing VPCs
+            sed -i '/data "aws_vpcs" "existing" {/,/count =/ s/count = 0/count = 1/g' terraform/main.tf
+          else
+            echo "VPC_EXISTS=false" >> $GITHUB_ENV
+            echo "🆕 No VPCs exist - will use default VPC"
+          fi
+          
           # Check if EC2 instances with the tag Name=cerberes-instance exist
           EC2_COUNT=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=cerberes-instance" "Name=instance-state-name,Values=running,stopped" --query "length(Reservations[*].Instances[*])" --output text)
           

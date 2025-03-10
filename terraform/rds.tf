@@ -2,7 +2,7 @@
 resource "aws_security_group" "db_sg" {
   name        = "${var.app_name}-db-sg"
   description = "Security group for RDS database"
-  vpc_id      = aws_vpc.app_vpc.id
+  vpc_id      = local.vpc_id
 
   # PostgreSQL access from EC2 security group
   ingress {
@@ -38,10 +38,10 @@ data "aws_db_subnet_group" "existing" {
 
 # DB Subnet Group - only created if it doesn't already exist
 resource "aws_db_subnet_group" "db_subnet_group" {
-  # Only create if the data lookup doesn't find an existing one
-  count      = length(data.aws_db_subnet_group.existing) > 0 ? 0 : 1
+  # Only create if the data lookup doesn't find an existing one and we have private subnets
+  count      = length(data.aws_db_subnet_group.existing) > 0 ? 0 : (length(local.private_subnet_ids) >= 2 ? 1 : 0)
   name       = "${var.app_name}-db-subnet-group"
-  subnet_ids = [aws_subnet.private_subnet_1.id, aws_subnet.private_subnet_2.id]
+  subnet_ids = local.private_subnet_ids
 
   tags = {
     Name = "${var.app_name}-db-subnet-group"
@@ -68,12 +68,18 @@ locals {
                       
   # Get the DB endpoint safely
   db_endpoint = length(data.aws_db_instance.existing) > 0 ? data.aws_db_instance.existing[0].endpoint : (length(aws_db_instance.postgres) > 0 ? aws_db_instance.postgres[0].endpoint : "no-endpoint-available")
+  
+  # Get the private subnet IDs to use
+  private_subnet_ids = length(data.aws_subnets.private) > 0 && length(data.aws_subnets.private[0].ids) >= 2 ? 
+                      [data.aws_subnets.private[0].ids[0], data.aws_subnets.private[0].ids[1]] : 
+                      length(aws_subnet.private_subnet_1) > 0 && length(aws_subnet.private_subnet_2) > 0 ? 
+                      [aws_subnet.private_subnet_1[0].id, aws_subnet.private_subnet_2[0].id] : []
 }
 
 # RDS PostgreSQL instance - only created if it doesn't already exist
 resource "aws_db_instance" "postgres" {
-  # Only create if the data lookup doesn't find an existing one
-  count                  = local.create_db_instance ? 1 : 0
+  # Only create if the data lookup doesn't find an existing one and we have a subnet group
+  count                  = local.create_db_instance && local.subnet_group_name != "" ? 1 : 0
   identifier             = "${var.app_name}-db"
   engine                 = "postgres"
   # Let AWS choose the default version by not specifying engine_version
@@ -96,15 +102,6 @@ resource "aws_db_instance" "postgres" {
   
   tags = {
     Name = "${var.app_name}-db"
-  }
-
-  # Prevent recreation if certain attributes change
-  lifecycle {
-    ignore_changes = [
-      snapshot_identifier,
-      password,   # Allow password updates without recreation
-      engine_version # Allow version updates without recreation
-    ]
   }
 }
 
