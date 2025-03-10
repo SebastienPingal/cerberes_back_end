@@ -120,7 +120,8 @@ jobs:
           if [ "$VPC_COUNT" -gt "0" ]; then
             echo "VPC_EXISTS=true" >> $GITHUB_ENV
             echo "✅ VPCs exist - will use existing ones"
-            sed -i '/data "aws_vpcs" "existing" {/,/count =/ s/count = 0/count = 1/g' terraform/main.tf
+            # Don't modify the Terraform file if we're starting from scratch
+            # sed -i '/data "aws_vpcs" "existing" {/,/count =/ s/count = 0/count = 1/g' terraform/main.tf
           else
             echo "VPC_EXISTS=false" >> $GITHUB_ENV
             echo "🆕 No VPCs exist - will use default VPC"
@@ -140,12 +141,20 @@ jobs:
             echo "EC2_SG_EXISTS=true" >> $GITHUB_ENV
             echo "EC2_SG_ID=$EC2_SG_ID" >> $GITHUB_ENV
             echo "✅ EC2 Security Group exists: $EC2_SG_ID"
+            # Don't modify the Terraform file if we're starting from scratch
+            # sed -i '/data "aws_security_group" "ec2_existing" {/,/count =/ s/count = 0/count = 1/g' terraform/ec2.tf
+          else
+            echo "EC2_SG_EXISTS=false" >> $GITHUB_ENV
           fi
           
           if [ "$DB_SG_ID" != "None" ]; then
             echo "DB_SG_EXISTS=true" >> $GITHUB_ENV
             echo "DB_SG_ID=$DB_SG_ID" >> $GITHUB_ENV
             echo "✅ DB Security Group exists: $DB_SG_ID"
+            # Don't modify the Terraform file if we're starting from scratch
+            # sed -i '/data "aws_security_group" "db_existing" {/,/count =/ s/count = 0/count = 1/g' terraform/rds.tf
+          else
+            echo "DB_SG_EXISTS=false" >> $GITHUB_ENV
           fi
           
           if [ "$CERBERES_SG_ID" != "None" ]; then
@@ -215,119 +224,15 @@ jobs:
             sed -i "s/security_group_id = \"\"/security_group_id = \"$CERBERES_SG_ID\"/g" terraform/terraform.tfvars
           fi
           
-          # Add cross-security group rules if both EC2 and DB security groups exist
-          if [ "$EC2_SG_ID" != "None" ] && [ "$DB_SG_ID" != "None" ]; then
-            echo "🔧 Adding cross-security group rules..."
-            
-            # Allow EC2 to connect to RDS
-            echo "🔧 Adding rule to allow EC2 security group to access RDS security group..."
-            aws ec2 authorize-security-group-ingress \
-              --group-id $DB_SG_ID \
-              --protocol tcp \
-              --port 5432 \
-              --source-group $EC2_SG_ID || echo "⚠️ EC2 to RDS rule already exists or couldn't be added"
-              
-            echo "✅ Added cross-security group rules"
-          fi
-          
-          # If we have both the unified security group and the EC2 security group, add rules between them
-          if [ "$CERBERES_SG_ID" != "None" ] && [ "$EC2_SG_ID" != "None" ]; then
-            echo "🔧 Adding rules between unified and EC2 security groups..."
-            
-            # Allow EC2 security group to access the unified security group's PostgreSQL
-            echo "🔧 Adding rule to allow EC2 security group to access unified security group's PostgreSQL..."
-            aws ec2 authorize-security-group-ingress \
-              --group-id $CERBERES_SG_ID \
-              --protocol tcp \
-              --port 5432 \
-              --source-group $EC2_SG_ID || echo "⚠️ EC2 to unified rule already exists or couldn't be added"
-              
-            echo "✅ Added rules between unified and EC2 security groups"
-          fi
-          
-          # If we have both the unified security group and the DB security group, add rules between them
-          if [ "$CERBERES_SG_ID" != "None" ] && [ "$DB_SG_ID" != "None" ]; then
-            echo "🔧 Adding rules between unified and DB security groups..."
-            
-            # Allow unified security group to access the DB security group's PostgreSQL
-            echo "🔧 Adding rule to allow unified security group to access DB security group's PostgreSQL..."
-            aws ec2 authorize-security-group-ingress \
-              --group-id $DB_SG_ID \
-              --protocol tcp \
-              --port 5432 \
-              --source-group $CERBERES_SG_ID || echo "⚠️ Unified to DB rule already exists or couldn't be added"
-              
-            echo "✅ Added rules between unified and DB security groups"
-          fi
-          
-          # Check if the security group has the required rules
-          if [ "$CERBERES_SG_ID" != "None" ]; then
-            echo "🔍 Checking security group rules..."
-            
-            # Check for SSH rule
-            SSH_RULE=$(aws ec2 describe-security-groups --group-id $CERBERES_SG_ID --query "SecurityGroups[0].IpPermissions[?FromPort==\`22\` && ToPort==\`22\`].IpRanges[?CidrIp==\`0.0.0.0/0\`].CidrIp" --output text)
-            if [ -z "$SSH_RULE" ]; then
-              echo "🔧 Adding SSH access rule..."
-              aws ec2 authorize-security-group-ingress \
-                --group-id $CERBERES_SG_ID \
-                --protocol tcp \
-                --port 22 \
-                --cidr 0.0.0.0/0 || echo "⚠️ SSH rule already exists or couldn't be added"
-            else
-              echo "✅ SSH rule already exists"
-            fi
-            
-            # Check for HTTP rule
-            HTTP_RULE=$(aws ec2 describe-security-groups --group-id $CERBERES_SG_ID --query "SecurityGroups[0].IpPermissions[?FromPort==\`80\` && ToPort==\`80\`].IpRanges[?CidrIp==\`0.0.0.0/0\`].CidrIp" --output text)
-            if [ -z "$HTTP_RULE" ]; then
-              echo "🔧 Adding HTTP access rule..."
-              aws ec2 authorize-security-group-ingress \
-                --group-id $CERBERES_SG_ID \
-                --protocol tcp \
-                --port 80 \
-                --cidr 0.0.0.0/0 || echo "⚠️ HTTP rule already exists or couldn't be added"
-            else
-              echo "✅ HTTP rule already exists"
-            fi
-            
-            # Check for application port rule
-            APP_RULE=$(aws ec2 describe-security-groups --group-id $CERBERES_SG_ID --query "SecurityGroups[0].IpPermissions[?FromPort==\`3000\` && ToPort==\`3000\`].IpRanges[?CidrIp==\`0.0.0.0/0\`].CidrIp" --output text)
-            if [ -z "$APP_RULE" ]; then
-              echo "🔧 Adding application port access rule..."
-              aws ec2 authorize-security-group-ingress \
-                --group-id $CERBERES_SG_ID \
-                --protocol tcp \
-                --port 3000 \
-                --cidr 0.0.0.0/0 || echo "⚠️ Application port rule already exists or couldn't be added"
-            else
-              echo "✅ Application port rule already exists"
-            fi
-            
-            # Check for PostgreSQL rule
-            PG_RULE=$(aws ec2 describe-security-groups --group-id $CERBERES_SG_ID --query "SecurityGroups[0].IpPermissions[?FromPort==\`5432\` && ToPort==\`5432\`].UserIdGroupPairs[?GroupId==\`$CERBERES_SG_ID\`].GroupId" --output text)
-            if [ -z "$PG_RULE" ]; then
-              echo "🔧 Adding PostgreSQL access rule..."
-              aws ec2 authorize-security-group-ingress \
-                --group-id $CERBERES_SG_ID \
-                --protocol tcp \
-                --port 5432 \
-                --source-group $CERBERES_SG_ID || echo "⚠️ PostgreSQL rule already exists or couldn't be added"
-            else
-              echo "✅ PostgreSQL rule already exists"
-            fi
-            
-            echo "✅ Security group rules verified"
-          fi
-          
-          # Check if EC2 instances with the tag Name=cerberes-instance exist
+          # Check for EC2 instances with the tag Name=cerberes-instance exist
           EC2_COUNT=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=cerberes-instance" "Name=instance-state-name,Values=running,stopped" --query "length(Reservations[*].Instances[*])" --output text)
           
           if [ "$EC2_COUNT" -gt "0" ]; then
             echo "EC2_INSTANCE_EXISTS=true" >> $GITHUB_ENV
             EC2_ID=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=cerberes-instance" "Name=instance-state-name,Values=running,stopped" --query "Reservations[0].Instances[0].InstanceId" --output text)
             echo "✅ EC2 Instance exists - will use existing one: $EC2_ID"
-            # Modify the Terraform code to use the existing EC2 instance
-            sed -i '/data "aws_instances" "existing" {/,/count =/ s/count = 0/count = 1/g' terraform/ec2.tf
+            # Don't modify the Terraform file if we're starting from scratch
+            # sed -i '/data "aws_instances" "existing" {/,/count =/ s/count = 0/count = 1/g' terraform/ec2.tf
           else
             echo "EC2_INSTANCE_EXISTS=false" >> $GITHUB_ENV
             echo "🆕 EC2 Instance does not exist - will create new one"
@@ -337,8 +242,8 @@ jobs:
           if aws rds describe-db-subnet-groups --db-subnet-group-name cerberes-db-subnet-group &> /dev/null; then
             echo "SUBNET_GROUP_EXISTS=true" >> $GITHUB_ENV
             echo "✅ DB Subnet Group exists - will use existing one"
-            # Modify the Terraform code to use the existing subnet group
-            sed -i '/data "aws_db_subnet_group" "existing" {/,/count =/ s/count = 0/count = 1/g' terraform/rds.tf
+            # Don't modify the Terraform file if we're starting from scratch
+            # sed -i '/data "aws_db_subnet_group" "existing" {/,/count =/ s/count = 0/count = 1/g' terraform/rds.tf
           else
             echo "SUBNET_GROUP_EXISTS=false" >> $GITHUB_ENV
             echo "🆕 DB Subnet Group does not exist - will create new one"
@@ -348,8 +253,8 @@ jobs:
           if aws rds describe-db-instances --db-instance-identifier cerberes-db &> /dev/null; then
             echo "DB_INSTANCE_EXISTS=true" >> $GITHUB_ENV
             echo "✅ DB Instance exists - will use existing one"
-            # Modify the Terraform code to use the existing DB instance
-            sed -i '/data "aws_db_instance" "existing" {/,/count =/ s/count = 0/count = 1/g' terraform/rds.tf
+            # Don't modify the Terraform file if we're starting from scratch
+            # sed -i '/data "aws_db_instance" "existing" {/,/count =/ s/count = 0/count = 1/g' terraform/rds.tf
           else
             echo "DB_INSTANCE_EXISTS=false" >> $GITHUB_ENV
             echo "🆕 DB Instance does not exist - will create new one"

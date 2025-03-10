@@ -30,9 +30,9 @@ data "aws_db_subnet_group" "existing" {
 # DB Subnet Group - only created if it doesn't already exist
 resource "aws_db_subnet_group" "db_subnet_group" {
   # Only create if the data lookup doesn't find an existing one and we have private subnets
-  count      = length(data.aws_db_subnet_group.existing) > 0 ? 0 : (length(local.private_subnet_ids) >= 2 ? 1 : 0)
+  count      = length(data.aws_db_subnet_group.existing) > 0 ? 0 : 1
   name       = "${var.app_name}-db-subnet-group"
-  subnet_ids = local.private_subnet_ids
+  subnet_ids = length(local.private_subnet_ids) >= 2 ? local.private_subnet_ids : [aws_subnet.private_subnet_1[0].id, aws_subnet.private_subnet_2[0].id]
 
   tags = {
     Name = "${var.app_name}-db-subnet-group"
@@ -54,7 +54,7 @@ locals {
   db_endpoint = length(data.aws_db_instance.existing) > 0 ? data.aws_db_instance.existing[0].endpoint : (length(aws_db_instance.postgres) > 0 ? aws_db_instance.postgres[0].endpoint : "no-endpoint-available")
   
   # Get the private subnet IDs to use
-  private_subnet_ids = length(data.aws_subnets.private) > 0 && length(data.aws_subnets.private[0].ids) >= 2 ? [data.aws_subnets.private[0].ids[0], data.aws_subnets.private[0].ids[1]] : (length(aws_subnet.private_subnet_1) > 0 && length(aws_subnet.private_subnet_2) > 0 ? [aws_subnet.private_subnet_1[0].id, aws_subnet.private_subnet_2[0].id] : [])
+  private_subnet_ids = length(data.aws_subnets.private) > 0 && length(data.aws_subnets.private[0].ids) >= 2 ? slice(data.aws_subnets.private[0].ids, 0, 2) : (length(aws_subnet.private_subnet_1) > 0 && length(aws_subnet.private_subnet_2) > 0 ? [aws_subnet.private_subnet_1[0].id, aws_subnet.private_subnet_2[0].id] : [])
   
   # Determine which security group to use for RDS
   use_existing_db_sg = var.security_group_id == "" && var.existing_db_sg_id != ""
@@ -75,7 +75,7 @@ resource "aws_db_instance" "postgres" {
   db_name                = "cerberes"
   username               = var.db_username
   password               = var.db_password
-  db_subnet_group_name   = aws_db_subnet_group.db_subnet_group[0].name
+  db_subnet_group_name   = length(data.aws_db_subnet_group.existing) > 0 ? data.aws_db_subnet_group.existing[0].name : length(aws_db_subnet_group.db_subnet_group) > 0 ? aws_db_subnet_group.db_subnet_group[0].name : null
   vpc_security_group_ids = [local.db_sg_id]
   publicly_accessible    = false
   skip_final_snapshot    = true

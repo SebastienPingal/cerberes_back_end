@@ -45,71 +45,75 @@ data "aws_instances" "existing" {
 # Local variable to determine if we should create a new instance
 locals {
   # Check if we should create a new instance
-  create_instance = length(data.aws_instances.existing) == 0 || length(data.aws_instances.existing[0].ids) == 0
+  create_instance = length(data.aws_instances.existing) == 0 || (length(data.aws_instances.existing) > 0 && length(data.aws_instances.existing[0].ids) == 0)
   
   # Get the existing IP if available
-  existing_ip = length(data.aws_instances.existing) > 0 ? (length(data.aws_instances.existing[0].ids) > 0 ? (length(data.aws_instances.existing[0].public_ips) > 0 ? data.aws_instances.existing[0].public_ips[0] : "") : "") : ""
+  existing_ip = length(data.aws_instances.existing) > 0 && length(data.aws_instances.existing[0].ids) > 0 ? data.aws_instances.existing[0].public_ips[0] : ""
   
+  # Get the IP of the new instance if created
   new_instance_ip = length(aws_instance.app_instance) > 0 ? aws_instance.app_instance[0].public_ip : ""
   
-  # Final IP to use
-  final_ip = local.existing_ip != "" ? local.existing_ip : (local.new_instance_ip != "" ? local.new_instance_ip : "no-ip-available")
-  
   # Determine which security group to use
-  use_shared_sg = var.security_group_id != ""
   use_existing_sg = var.security_group_id == "" && var.existing_ec2_sg_id != ""
   
   # Security group ID to use
   sg_id = var.security_group_id != "" ? var.security_group_id : (local.use_existing_sg ? var.existing_ec2_sg_id : (length(data.aws_security_group.ec2_sg) > 0 ? data.aws_security_group.ec2_sg[0].id : ""))
+  
+  # Get the IP to use for output
+  instance_ip = local.existing_ip != "" ? local.existing_ip : local.new_instance_ip
 }
 
 # EC2 Instance for hosting the application
 resource "aws_instance" "app_instance" {
-  count                  = local.create_instance ? 1 : 0
-  ami                    = "ami-01dd271720c1ba44f"  # Ubuntu 22.04 LTS AMI for eu-west-1 (Ireland)
-  instance_type          = var.ec2_instance_type
-  key_name               = var.ssh_key_name
-  subnet_id              = aws_subnet.public_subnet[0].id
-  vpc_security_group_ids = [local.sg_id]
-
+  count         = local.create_instance ? 1 : 0
+  ami           = "ami-0905a3c97561e0b69" # Ubuntu 22.04 LTS in eu-west-1
+  instance_type = var.ec2_instance_type
+  key_name      = var.ssh_key_name
+  
+  # Use the first public subnet if available, otherwise create a new one
+  subnet_id = length(data.aws_subnets.public) > 0 && length(data.aws_subnets.public[0].ids) > 0 ? data.aws_subnets.public[0].ids[0] : aws_subnet.public_subnet[0].id
+  
+  # Use the security group ID from the variable if provided, otherwise use the EC2 security group
+  vpc_security_group_ids = var.security_group_id != "" ? [var.security_group_id] : [data.aws_security_group.ec2_sg[0].id]
+  
+  associate_public_ip_address = true
+  
+  # User data script to set up the instance
   user_data = <<-EOF
-              #!/bin/bash
-              
-              # Update package lists and install required packages
-              apt-get update -y
-              apt-get install -y nodejs npm git curl
-              
-              # Install NVM for more reliable Node.js installation
-              curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.3/install.sh | bash
-              export NVM_DIR="$HOME/.nvm"
-              [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-              
-              # Install Node.js LTS
-              nvm install --lts
-              
-              # Install global npm packages
-              npm install -g pnpm pm2
-              
-              # Create application directory
-              mkdir -p /home/ubuntu/app
-              chown -R ubuntu:ubuntu /home/ubuntu/app
-              
-              # Configure PM2 to start on boot
-              env PATH=$PATH:/usr/bin pm2 startup systemd -u ubuntu --hp /home/ubuntu
-              
-              # Add Node.js to PATH for all users
-              echo 'export PATH=$PATH:/usr/bin/nodejs' >> /etc/profile
-              
-              echo "EC2 instance setup complete"
-              EOF
-
+    #!/bin/bash
+    echo "Setting up the EC2 instance..."
+    apt-get update
+    apt-get install -y apt-transport-https ca-certificates curl software-properties-common
+    
+    # Install Node.js
+    curl -fsSL https://deb.nodesource.com/setup_18.x | bash -
+    apt-get install -y nodejs
+    
+    # Install PM2 globally
+    npm install -g pm2
+    
+    # Create app directory
+    mkdir -p /home/ubuntu/app
+    chown -R ubuntu:ubuntu /home/ubuntu/app
+    
+    # Set up PM2 to start on boot
+    env PATH=$PATH:/usr/bin pm2 startup systemd -u ubuntu --hp /home/ubuntu
+    
+    echo "EC2 instance setup complete!"
+  EOF
+  
   tags = {
     Name = "${var.app_name}-instance"
+  }
+  
+  # Wait for the instance to be created before returning
+  lifecycle {
+    create_before_destroy = true
   }
 }
 
 # Output the public IP - using the local variable for safety
 output "public_ip" {
   description = "Public IP address of the EC2 instance"
-  value       = local.final_ip
+  value       = local.instance_ip
 }
