@@ -256,15 +256,33 @@ jobs:
           PORT=3000
           EOF
           
-          # Use scp directly instead of the action
-          scp -o StrictHostKeyChecking=no -i ~/.ssh/ec2_key -r dist/ node_modules/ package.json pnpm-lock.yaml .env ubuntu@${{ env.EC2_IP }}:/home/ubuntu/app/
+          # Create app directory on the server if it doesn't exist
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/ec2_key ubuntu@${{ env.EC2_IP }} "mkdir -p /home/ubuntu/app"
+          
+          echo "🧹 Cleaning up old node_modules on server to free space..."
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/ec2_key ubuntu@${{ env.EC2_IP }} "rm -rf /home/ubuntu/app/node_modules"
+          
+          # Transfer files in smaller chunks with compression
+          echo "📦 Transferring application files..."
+          scp -o StrictHostKeyChecking=no -o ConnectTimeout=60 -C -i ~/.ssh/ec2_key .env package.json pnpm-lock.yaml ubuntu@${{ env.EC2_IP }}:/home/ubuntu/app/
+          
+          echo "📦 Transferring built code..."
+          scp -o StrictHostKeyChecking=no -o ConnectTimeout=60 -C -i ~/.ssh/ec2_key -r dist/ ubuntu@${{ env.EC2_IP }}:/home/ubuntu/app/
+          
+          echo "📦 Creating production dependencies on server..."
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/ec2_key ubuntu@${{ env.EC2_IP }} << 'EOF'
+            cd /home/ubuntu/app
+            npm install -g pnpm
+            pnpm install --prod
+          EOF
+          
           echo "📦 Files deployed to EC2"
 
       - name: Configure and start application
         if: steps.terraform-apply.outcome == 'success'
         run: |
           # Use ssh directly instead of the action
-          ssh -o StrictHostKeyChecking=no -i ~/.ssh/ec2_key ubuntu@${{ env.EC2_IP }} << 'EOF'
+          ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=60 -i ~/.ssh/ec2_key ubuntu@${{ env.EC2_IP }} << 'EOF'
             cd /home/ubuntu/app
             
             # Ensure required software is installed
@@ -276,16 +294,9 @@ jobs:
             fi
             
             if ! command -v pm2 &> /dev/null; then
-              echo "📦 Installing PM2 and pnpm..."
-              sudo npm install -g pm2 pnpm
+              echo "📦 Installing PM2..."
+              sudo npm install -g pm2
             fi
-            
-            # We're now skipping the pnpm install since we're copying node_modules directly
-            echo "📦 Using pre-installed dependencies..."
-            
-            # Test the application directly first to check for errors
-            echo "🔍 Testing application startup..."
-            node -e "try { require('./dist/src/server'); console.log('✅ Module loads successfully'); } catch(e) { console.error('❌ Error loading module:', e); process.exit(1); }"
             
             # Stop the application if it's running
             echo "🔄 Restarting application..."
@@ -316,12 +327,23 @@ jobs:
             pm2 list
             
             # Check if the application is listening on port 3000
-            if netstat -tulpn 2>/dev/null | grep -q ":3000"; then
-              echo "✅ Application is listening on port 3000"
+            if command -v netstat &> /dev/null; then
+              if netstat -tulpn 2>/dev/null | grep -q ":3000"; then
+                echo "✅ Application is listening on port 3000"
+              else
+                echo "⚠️ Application may not be listening on port 3000"
+                netstat -tulpn | grep node
+              fi
             else
-              echo "⚠️ Application may not be listening on port 3000"
+              echo "⚠️ netstat not available, installing net-tools..."
+              sudo apt-get update
               sudo apt-get install -y net-tools
-              netstat -tulpn | grep node
+              if netstat -tulpn | grep -q ":3000"; then
+                echo "✅ Application is listening on port 3000"
+              else
+                echo "⚠️ Application may not be listening on port 3000"
+                netstat -tulpn | grep node
+              fi
             fi
             
             echo "🚀 Deployment completed"
