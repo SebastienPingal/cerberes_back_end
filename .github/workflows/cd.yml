@@ -224,14 +224,10 @@ jobs:
           echo "TF_VAR_existing_ec2_sg_id: $TF_VAR_existing_ec2_sg_id"
           echo "TF_VAR_existing_db_sg_id: $TF_VAR_existing_db_sg_id"
 
-      - name: Terraform Plan
-        working-directory: ./terraform
-        run: terraform plan -out=tfplan
-
       - name: Terraform Apply
         id: terraform-apply
         working-directory: ./terraform
-        run: terraform apply -auto-approve tfplan
+        run: terraform apply -auto-approve
 
       # Get EC2 public IP directly from AWS CLI instead of Terraform output
       - name: Get EC2 public IP
