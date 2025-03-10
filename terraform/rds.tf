@@ -29,18 +29,22 @@ resource "aws_security_group" "db_sg" {
   }
 }
 
-# DB Subnet Group with timestamp suffix to avoid conflicts
+# Use an existing DB subnet group if it exists
+# This is handled in the workflow by checking for existing resources
+data "aws_db_subnet_group" "existing" {
+  name = "${var.app_name}-db-subnet-group"
+  count = 0  # This is set to 0 by default, but the workflow will modify this file if the subnet group exists
+}
+
+# DB Subnet Group - only created if it doesn't already exist
 resource "aws_db_subnet_group" "db_subnet_group" {
-  name       = "${var.app_name}-db-subnet-group-new"  # Changed name to avoid conflict
+  # Only create if the data lookup doesn't find an existing one
+  count      = length(data.aws_db_subnet_group.existing) > 0 ? 0 : 1
+  name       = "${var.app_name}-db-subnet-group"
   subnet_ids = [aws_subnet.private_subnet_1.id, aws_subnet.private_subnet_2.id]
 
   tags = {
-    Name = "${var.app_name}-db-subnet-group-new"
-  }
-
-  # Prevent recreation if attributes change but resource exists
-  lifecycle {
-    ignore_changes = [subnet_ids]
+    Name = "${var.app_name}-db-subnet-group"
   }
 }
 
@@ -55,7 +59,8 @@ resource "aws_db_instance" "postgres" {
   db_name                = "cerberes"
   username               = var.db_username
   password               = var.db_password
-  db_subnet_group_name   = aws_db_subnet_group.db_subnet_group.name
+  # Use the existing subnet group if available, otherwise use the new one
+  db_subnet_group_name   = length(data.aws_db_subnet_group.existing) > 0 ? data.aws_db_subnet_group.existing[0].name : aws_db_subnet_group.db_subnet_group[0].name
   vpc_security_group_ids = [aws_security_group.db_sg.id]
   publicly_accessible    = false
   skip_final_snapshot    = true

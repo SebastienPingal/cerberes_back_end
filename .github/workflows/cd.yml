@@ -82,32 +82,36 @@ jobs:
           
           echo "🔑 Created terraform.tfvars with database credentials"
 
+      # Check for existing DB subnet group and modify Terraform code if it exists
+      - name: Check for existing DB subnet group
+        id: check-subnet-group
+        run: |
+          if aws rds describe-db-subnet-groups --db-subnet-group-name cerberes-db-subnet-group &> /dev/null; then
+            echo "SUBNET_GROUP_EXISTS=true" >> $GITHUB_ENV
+            echo "✅ DB Subnet Group exists - will use existing one"
+            # Modify the Terraform code to use the existing subnet group
+            sed -i 's/count = 0/count = 1/g' terraform/rds.tf
+          else
+            echo "SUBNET_GROUP_EXISTS=false" >> $GITHUB_ENV
+            echo "🆕 DB Subnet Group does not exist - will create new one"
+          fi
+
       - name: Terraform Init
         working-directory: ./terraform
         run: terraform init
 
-      # Check for existing resources but don't try to import them
-      # We're using a new resource name strategy instead
+      # Check for existing resources
       - name: Check for existing resources
         id: check-resources
         working-directory: ./terraform
         continue-on-error: true
         run: |
-          # Check if DB subnet group exists
-          if aws rds describe-db-subnet-groups --db-subnet-group-name cerberes-db-subnet-group &> /dev/null; then
-            echo "⚠️ DB Subnet Group exists - using new name to avoid conflict"
-          else
-            echo "🆕 DB Subnet Group does not exist"
-          fi
-          
           # Check if DB instance exists
           if aws rds describe-db-instances --db-instance-identifier cerberes-db &> /dev/null; then
-            echo "⚠️ DB Instance exists - may need manual cleanup"
+            echo "⚠️ DB Instance exists - will update if needed"
           else
-            echo "🆕 DB Instance does not exist"
+            echo "🆕 DB Instance does not exist - will create new one"
           fi
-
-      # Removed the import step since we're using a new resource name strategy
 
       - name: Terraform Plan
         working-directory: ./terraform
