@@ -46,7 +46,13 @@ variable "existing_ec2_sg_id" {
 }
 
 variable "existing_db_sg_id" {
-  description = "ID of an existing RDS security group to use (if empty, a new one will be created)"
+  description = "ID of an existing security group for the RDS instance"
+  type        = string
+  default     = ""
+}
+
+variable "security_group_id" {
+  description = "ID of the shared security group for both EC2 and RDS"
   type        = string
   default     = ""
 } 

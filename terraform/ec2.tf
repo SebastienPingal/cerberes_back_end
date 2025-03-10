@@ -13,10 +13,17 @@ data "aws_security_group" "ec2_existing" {
   }
 }
 
-# Look for existing EC2 security group
+# Look for existing EC2 security group or use the shared security group
 data "aws_security_group" "ec2_sg" {
+  count = var.security_group_id != "" ? 0 : 1
   name   = "${var.app_name}-ec2-sg"
   vpc_id = local.vpc_id
+}
+
+# Get the shared security group if provided
+data "aws_security_group" "shared_sg" {
+  count = var.security_group_id != "" ? 1 : 0
+  id    = var.security_group_id
 }
 
 # Use existing EC2 instance if it exists
@@ -37,9 +44,10 @@ data "aws_instances" "existing" {
 
 # Local variable to determine if we should create a new instance
 locals {
-  create_instance = length(data.aws_instances.existing) == 0 ? true : length(data.aws_instances.existing[0].ids) == 0
+  # Check if we should create a new instance
+  create_instance = length(data.aws_instances.existing) == 0 || length(data.aws_instances.existing[0].ids) == 0
   
-  # Safe way to get the public IP
+  # Get the existing IP if available
   existing_ip = length(data.aws_instances.existing) > 0 ? (length(data.aws_instances.existing[0].ids) > 0 ? (length(data.aws_instances.existing[0].public_ips) > 0 ? data.aws_instances.existing[0].public_ips[0] : "") : "") : ""
   
   new_instance_ip = length(aws_instance.app_instance) > 0 ? aws_instance.app_instance[0].public_ip : ""
@@ -47,9 +55,12 @@ locals {
   # Final IP to use
   final_ip = local.existing_ip != "" ? local.existing_ip : (local.new_instance_ip != "" ? local.new_instance_ip : "no-ip-available")
   
-  # Use existing security group ID if provided via environment variable
-  use_existing_sg = var.existing_ec2_sg_id != ""
-  sg_id = local.use_existing_sg ? var.existing_ec2_sg_id : data.aws_security_group.ec2_sg.id
+  # Determine which security group to use
+  use_shared_sg = var.security_group_id != ""
+  use_existing_sg = !local.use_shared_sg && var.existing_ec2_sg_id != ""
+  
+  # Security group ID to use
+  sg_id = local.use_shared_sg ? var.security_group_id : (local.use_existing_sg ? var.existing_ec2_sg_id : (length(data.aws_security_group.ec2_sg) > 0 ? data.aws_security_group.ec2_sg[0].id : ""))
 }
 
 # EC2 Instance for hosting the application

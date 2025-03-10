@@ -13,8 +13,9 @@ data "aws_security_group" "db_existing" {
   }
 }
 
-# Look for existing RDS security group
+# Look for existing RDS security group or use the shared security group
 data "aws_security_group" "db_sg" {
+  count = var.security_group_id != "" ? 0 : 1
   name   = "${var.app_name}-db-sg"
   vpc_id = local.vpc_id
 }
@@ -54,6 +55,13 @@ locals {
   
   # Get the private subnet IDs to use
   private_subnet_ids = length(data.aws_subnets.private) > 0 && length(data.aws_subnets.private[0].ids) >= 2 ? [data.aws_subnets.private[0].ids[0], data.aws_subnets.private[0].ids[1]] : (length(aws_subnet.private_subnet_1) > 0 && length(aws_subnet.private_subnet_2) > 0 ? [aws_subnet.private_subnet_1[0].id, aws_subnet.private_subnet_2[0].id] : [])
+  
+  # Determine which security group to use for RDS
+  use_shared_sg = var.security_group_id != ""
+  use_existing_db_sg = !local.use_shared_sg && var.existing_db_sg_id != ""
+  
+  # Security group ID to use for RDS
+  db_sg_id = local.use_shared_sg ? var.security_group_id : (local.use_existing_db_sg ? var.existing_db_sg_id : (length(data.aws_security_group.db_sg) > 0 ? data.aws_security_group.db_sg[0].id : ""))
 }
 
 # RDS PostgreSQL instance
@@ -69,7 +77,7 @@ resource "aws_db_instance" "postgres" {
   username               = var.db_username
   password               = var.db_password
   db_subnet_group_name   = aws_db_subnet_group.db_subnet_group[0].name
-  vpc_security_group_ids = [data.aws_security_group.db_sg.id]
+  vpc_security_group_ids = [local.db_sg_id]
   publicly_accessible    = false
   skip_final_snapshot    = true
   backup_retention_period = 1
