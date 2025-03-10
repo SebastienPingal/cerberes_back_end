@@ -109,8 +109,20 @@ resource "aws_instance" "app_instance" {
 
   user_data = <<-EOF
               #!/bin/bash
+              
+              # Update package lists and install required packages
               apt-get update -y
-              apt-get install -y nodejs npm git
+              apt-get install -y nodejs npm git curl
+              
+              # Install NVM for more reliable Node.js installation
+              curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.3/install.sh | bash
+              export NVM_DIR="$HOME/.nvm"
+              [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+              
+              # Install Node.js LTS
+              nvm install --lts
+              
+              # Install global npm packages
               npm install -g pnpm pm2
               
               # Create application directory
@@ -118,8 +130,10 @@ resource "aws_instance" "app_instance" {
               chown -R ubuntu:ubuntu /home/ubuntu/app
               
               # Configure PM2 to start on boot
-              pm2 startup
               env PATH=$PATH:/usr/bin pm2 startup systemd -u ubuntu --hp /home/ubuntu
+              
+              # Add Node.js to PATH for all users
+              echo 'export PATH=$PATH:/usr/bin/nodejs' >> /etc/profile
               
               echo "EC2 instance setup complete"
               EOF

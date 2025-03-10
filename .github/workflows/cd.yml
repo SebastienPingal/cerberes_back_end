@@ -261,11 +261,39 @@ jobs:
           ssh -o StrictHostKeyChecking=no -i ~/.ssh/ec2_key ubuntu@${{ env.EC2_IP }} << 'EOF'
             cd /home/ubuntu/app
             
+            # Ensure required software is installed
+            echo "🔍 Checking for required software..."
+            if ! command -v nodejs &> /dev/null; then
+              echo "📦 Installing Node.js and npm..."
+              sudo apt update
+              sudo apt install -y nodejs npm
+            fi
+            
+            if ! command -v pm2 &> /dev/null; then
+              echo "📦 Installing PM2 and pnpm..."
+              sudo npm install -g pm2 pnpm
+            fi
+            
             # Install dependencies and start with PM2
+            echo "📦 Installing dependencies..."
             pnpm install --prod
+            
+            # Stop the application if it's running
+            echo "🔄 Restarting application..."
             pm2 stop cerberes || echo "🤖 App not running"
+            
+            # Start the application
             pm2 start dist/src/server.js --name cerberes
             pm2 save
+            
+            # Configure PM2 to start on boot
+            echo "🔄 Setting up PM2 to start on boot..."
+            pm2 startup | grep "sudo" | bash || echo "⚠️ PM2 startup command failed, but continuing..."
+            pm2 save
+            
+            # Verify the application is running
+            echo "🔍 Verifying application status..."
+            pm2 list
             
             echo "🚀 Deployment completed"
           EOF
