@@ -1,5 +1,21 @@
-# Security group for RDS
+# Look for existing DB security group
+data "aws_security_group" "db_existing" {
+  count = 0  # This will be set to 1 by the workflow if we want to use existing security groups
+  
+  filter {
+    name   = "group-name"
+    values = ["${var.app_name}-db-sg"]
+  }
+  
+  filter {
+    name   = "vpc-id"
+    values = [local.vpc_id]
+  }
+}
+
+# Security group for RDS - only created if it doesn't already exist
 resource "aws_security_group" "db_sg" {
+  count       = length(data.aws_security_group.db_existing) > 0 ? 0 : 1
   name        = "${var.app_name}-db-sg"
   description = "Security group for RDS database"
   vpc_id      = local.vpc_id
@@ -9,7 +25,7 @@ resource "aws_security_group" "db_sg" {
     from_port       = 5432
     to_port         = 5432
     protocol        = "tcp"
-    security_groups = [aws_security_group.ec2_sg.id]
+    security_groups = [local.ec2_sg_id]
   }
 
   egress {
@@ -71,12 +87,18 @@ locals {
   
   # Get the private subnet IDs to use
   private_subnet_ids = length(data.aws_subnets.private) > 0 && length(data.aws_subnets.private[0].ids) >= 2 ? [data.aws_subnets.private[0].ids[0], data.aws_subnets.private[0].ids[1]] : (length(aws_subnet.private_subnet_1) > 0 && length(aws_subnet.private_subnet_2) > 0 ? [aws_subnet.private_subnet_1[0].id, aws_subnet.private_subnet_2[0].id] : [])
+  
+  # Get the EC2 security group ID to use
+  ec2_sg_id = length(data.aws_security_group.ec2_existing) > 0 ? data.aws_security_group.ec2_existing[0].id : length(aws_security_group.ec2_sg) > 0 ? aws_security_group.ec2_sg[0].id : null
+  
+  # Get the DB security group ID to use
+  db_sg_id = length(data.aws_security_group.db_existing) > 0 ? data.aws_security_group.db_existing[0].id : length(aws_security_group.db_sg) > 0 ? aws_security_group.db_sg[0].id : null
 }
 
 # RDS PostgreSQL instance - only created if it doesn't already exist
 resource "aws_db_instance" "postgres" {
-  # Only create if the data lookup doesn't find an existing one and we have a subnet group
-  count                  = local.create_db_instance && local.subnet_group_name != "" ? 1 : 0
+  # Only create if the data lookup doesn't find an existing one and we have a subnet group and security group
+  count                  = local.create_db_instance && local.subnet_group_name != "" && local.db_sg_id != null ? 1 : 0
   identifier             = "${var.app_name}-db"
   engine                 = "postgres"
   # Let AWS choose the default version by not specifying engine_version
@@ -88,7 +110,7 @@ resource "aws_db_instance" "postgres" {
   password               = var.db_password
   # Use the subnet group name from local variable
   db_subnet_group_name   = local.subnet_group_name
-  vpc_security_group_ids = [aws_security_group.db_sg.id]
+  vpc_security_group_ids = [local.db_sg_id]
   publicly_accessible    = false
   skip_final_snapshot    = true
   backup_retention_period = 1      # Reduced to 1 day to minimize storage usage

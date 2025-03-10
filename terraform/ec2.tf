@@ -1,5 +1,21 @@
-# Security group for EC2
+# Look for existing security group
+data "aws_security_group" "ec2_existing" {
+  count = 0  # This will be set to 1 by the workflow if we want to use existing security groups
+  
+  filter {
+    name   = "group-name"
+    values = ["${var.app_name}-ec2-sg"]
+  }
+  
+  filter {
+    name   = "vpc-id"
+    values = [local.vpc_id]
+  }
+}
+
+# Security group for EC2 - only created if it doesn't already exist
 resource "aws_security_group" "ec2_sg" {
+  count       = length(data.aws_security_group.ec2_existing) > 0 ? 0 : 1
   name        = "${var.app_name}-ec2-sg"
   description = "Security group for EC2 instance"
   vpc_id      = local.vpc_id
@@ -76,17 +92,20 @@ locals {
   
   # Get the subnet ID to use
   subnet_id = length(data.aws_subnets.public) > 0 && length(data.aws_subnets.public[0].ids) > 0 ? data.aws_subnets.public[0].ids[0] : (length(aws_subnet.public_subnet) > 0 ? aws_subnet.public_subnet[0].id : null)
+  
+  # Get the security group ID to use
+  sg_id = length(data.aws_security_group.ec2_existing) > 0 ? data.aws_security_group.ec2_existing[0].id : length(aws_security_group.ec2_sg) > 0 ? aws_security_group.ec2_sg[0].id : null
 }
 
 # EC2 Instance for hosting the application - only created if it doesn't already exist
 resource "aws_instance" "app_instance" {
-  # Only create if no existing instances are found and we have a subnet
-  count                  = local.create_instance && local.subnet_id != null ? 1 : 0
+  # Only create if no existing instances are found and we have a subnet and security group
+  count                  = local.create_instance && local.subnet_id != null && local.sg_id != null ? 1 : 0
   ami                    = "ami-01dd271720c1ba44f"  # Amazon Linux 2023 AMI for eu-west-1 (Ireland)
   instance_type          = var.ec2_instance_type
   key_name               = var.ssh_key_name
   subnet_id              = local.subnet_id
-  vpc_security_group_ids = [aws_security_group.ec2_sg.id]
+  vpc_security_group_ids = [local.sg_id]
 
   user_data = <<-EOF
               #!/bin/bash
