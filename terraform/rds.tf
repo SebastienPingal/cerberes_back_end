@@ -57,11 +57,10 @@ locals {
   private_subnet_ids = length(data.aws_subnets.private) > 0 && length(data.aws_subnets.private[0].ids) >= 2 ? [data.aws_subnets.private[0].ids[0], data.aws_subnets.private[0].ids[1]] : (length(aws_subnet.private_subnet_1) > 0 && length(aws_subnet.private_subnet_2) > 0 ? [aws_subnet.private_subnet_1[0].id, aws_subnet.private_subnet_2[0].id] : [])
   
   # Determine which security group to use for RDS
-  use_shared_sg = var.security_group_id != ""
-  use_existing_db_sg = !local.use_shared_sg && var.existing_db_sg_id != ""
+  use_existing_db_sg = var.security_group_id == "" && var.existing_db_sg_id != ""
   
   # Security group ID to use for RDS
-  db_sg_id = local.use_shared_sg ? var.security_group_id : (local.use_existing_db_sg ? var.existing_db_sg_id : (length(data.aws_security_group.db_sg) > 0 ? data.aws_security_group.db_sg[0].id : ""))
+  db_sg_id = var.security_group_id != "" ? var.security_group_id : (local.use_existing_db_sg ? var.existing_db_sg_id : (length(data.aws_security_group.db_sg) > 0 ? data.aws_security_group.db_sg[0].id : ""))
 }
 
 # RDS PostgreSQL instance

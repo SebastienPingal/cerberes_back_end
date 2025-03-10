@@ -57,10 +57,10 @@ locals {
   
   # Determine which security group to use
   use_shared_sg = var.security_group_id != ""
-  use_existing_sg = !local.use_shared_sg && var.existing_ec2_sg_id != ""
+  use_existing_sg = var.security_group_id == "" && var.existing_ec2_sg_id != ""
   
   # Security group ID to use
-  sg_id = local.use_shared_sg ? var.security_group_id : (local.use_existing_sg ? var.existing_ec2_sg_id : (length(data.aws_security_group.ec2_sg) > 0 ? data.aws_security_group.ec2_sg[0].id : ""))
+  sg_id = var.security_group_id != "" ? var.security_group_id : (local.use_existing_sg ? var.existing_ec2_sg_id : (length(data.aws_security_group.ec2_sg) > 0 ? data.aws_security_group.ec2_sg[0].id : ""))
 }
 
 # EC2 Instance for hosting the application
