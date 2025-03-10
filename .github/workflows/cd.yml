@@ -259,18 +259,31 @@ jobs:
           # Create app directory on the server if it doesn't exist
           ssh -o StrictHostKeyChecking=no -i ~/.ssh/ec2_key ubuntu@${{ env.EC2_IP }} "mkdir -p /home/ubuntu/app"
           
-          echo "🧹 Cleaning up old node_modules on server to free space..."
-          ssh -o StrictHostKeyChecking=no -i ~/.ssh/ec2_key ubuntu@${{ env.EC2_IP }} "rm -rf /home/ubuntu/app/node_modules"
+          echo "🧹 Cleaning up old files on server to free space..."
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/ec2_key ubuntu@${{ env.EC2_IP }} "rm -rf /home/ubuntu/app/node_modules /home/ubuntu/app/dist"
           
-          # Transfer files in smaller chunks with compression
-          echo "📦 Transferring application files..."
+          # Transfer configuration files
+          echo "📦 Transferring configuration files..."
           scp -o StrictHostKeyChecking=no -o ConnectTimeout=60 -C -i ~/.ssh/ec2_key .env package.json pnpm-lock.yaml ubuntu@${{ env.EC2_IP }}:/home/ubuntu/app/
           
-          echo "📦 Transferring built code..."
-          scp -o StrictHostKeyChecking=no -o ConnectTimeout=60 -C -i ~/.ssh/ec2_key -r dist/ ubuntu@${{ env.EC2_IP }}:/home/ubuntu/app/
+          # Compress and transfer dist directory
+          echo "📦 Compressing and transferring built code..."
+          tar -czf dist.tar.gz dist/
+          scp -o StrictHostKeyChecking=no -o ConnectTimeout=60 -i ~/.ssh/ec2_key dist.tar.gz ubuntu@${{ env.EC2_IP }}:/home/ubuntu/app/
           
-          echo "📦 Transferring node_modules directory..."
-          scp -o StrictHostKeyChecking=no -o ConnectTimeout=60 -C -i ~/.ssh/ec2_key -r node_modules/ ubuntu@${{ env.EC2_IP }}:/home/ubuntu/app/
+          # Compress and transfer node_modules directory
+          echo "📦 Compressing and transferring node_modules..."
+          tar -czf node_modules.tar.gz node_modules/
+          scp -o StrictHostKeyChecking=no -o ConnectTimeout=60 -i ~/.ssh/ec2_key node_modules.tar.gz ubuntu@${{ env.EC2_IP }}:/home/ubuntu/app/
+          
+          # Extract the archives on the server
+          echo "📦 Extracting files on server..."
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/ec2_key ubuntu@${{ env.EC2_IP }} << 'EOF'
+            cd /home/ubuntu/app
+            tar -xzf dist.tar.gz
+            tar -xzf node_modules.tar.gz
+            rm dist.tar.gz node_modules.tar.gz
+          EOF
           
           echo "📦 Files deployed to EC2"
 
