@@ -78,6 +78,15 @@ jobs:
             echo "RDS_EXISTS=false" >> $GITHUB_ENV
           fi
           
+          # Check for existing DB subnet group
+          if aws rds describe-db-subnet-groups --db-subnet-group-name cerberes-db-subnet-group &> /dev/null; then
+            echo "✅ Found existing DB subnet group"
+            echo "DB_SUBNET_GROUP_EXISTS=true" >> $GITHUB_ENV
+          else
+            echo "🆕 No existing DB subnet group found"
+            echo "DB_SUBNET_GROUP_EXISTS=false" >> $GITHUB_ENV
+          fi
+          
           # Get the default VPC ID
           DEFAULT_VPC_ID=$(aws ec2 describe-vpcs --filters "Name=isDefault,Values=true" --query "Vpcs[0].VpcId" --output text)
           echo "DEFAULT_VPC_ID=$DEFAULT_VPC_ID" >> $GITHUB_ENV

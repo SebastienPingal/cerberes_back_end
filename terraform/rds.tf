@@ -1,7 +1,15 @@
-# DB Subnet Group for RDS
+# Check if DB subnet group exists
+data "aws_db_subnet_groups" "existing" {
+  filter {
+    name   = "db-subnet-group-name"
+    values = ["${var.app_name}-db-subnet-group"]
+  }
+}
+
+# DB Subnet Group for RDS - only create if it doesn't already exist
 resource "aws_db_subnet_group" "db_subnet_group" {
-  # Only create if we have at least 2 subnets
-  count      = length(local.private_subnet_ids) >= 2 ? 1 : 0
+  # Only create if we have at least 2 subnets AND the subnet group doesn't already exist
+  count      = length(local.private_subnet_ids) >= 2 && length(data.aws_db_subnet_groups.existing.names) == 0 ? 1 : 0
   name       = "${var.app_name}-db-subnet-group"
   subnet_ids = local.private_subnet_ids
 
@@ -20,8 +28,11 @@ data "aws_db_instances" "existing" {
 
 # Local variables for RDS
 locals {
-  # Get the subnet group name to use
-  db_subnet_group_name = length(aws_db_subnet_group.db_subnet_group) > 0 ? aws_db_subnet_group.db_subnet_group[0].name : null
+  # Check if DB subnet group exists
+  db_subnet_group_exists = length(data.aws_db_subnet_groups.existing.names) > 0
+  
+  # Get the subnet group name to use - use the existing one if it exists, otherwise use the one we created
+  db_subnet_group_name = local.db_subnet_group_exists ? "${var.app_name}-db-subnet-group" : (length(aws_db_subnet_group.db_subnet_group) > 0 ? aws_db_subnet_group.db_subnet_group[0].name : null)
   
   # Check if DB instance exists - handle the count properly
   db_instance_exists = length(data.aws_db_instances.existing.instance_identifiers) > 0
