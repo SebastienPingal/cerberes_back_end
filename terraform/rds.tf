@@ -55,10 +55,31 @@ data "aws_db_instance" "existing" {
   count = 0  # This is set to 0 by default, but the workflow will modify this file if the instance exists
 }
 
+# Local variables for RDS
+locals {
+  # Determine if we need to create a new DB subnet group
+  create_subnet_group = length(data.aws_db_subnet_group.existing) == 0
+  
+  # Determine if we need to create a new RDS instance
+  create_db_instance = length(data.aws_db_instance.existing) == 0
+  
+  # Get the subnet group name safely
+  subnet_group_name = length(data.aws_db_subnet_group.existing) > 0 ? 
+                      data.aws_db_subnet_group.existing[0].name : 
+                      length(aws_db_subnet_group.db_subnet_group) > 0 ? 
+                      aws_db_subnet_group.db_subnet_group[0].name : ""
+                      
+  # Get the DB endpoint safely
+  db_endpoint = length(data.aws_db_instance.existing) > 0 ? 
+                data.aws_db_instance.existing[0].endpoint : 
+                length(aws_db_instance.postgres) > 0 ? 
+                aws_db_instance.postgres[0].endpoint : "no-endpoint-available"
+}
+
 # RDS PostgreSQL instance - only created if it doesn't already exist
 resource "aws_db_instance" "postgres" {
   # Only create if the data lookup doesn't find an existing one
-  count                  = length(data.aws_db_instance.existing) > 0 ? 0 : 1
+  count                  = local.create_db_instance ? 1 : 0
   identifier             = "${var.app_name}-db"
   engine                 = "postgres"
   # Let AWS choose the default version by not specifying engine_version
@@ -68,8 +89,8 @@ resource "aws_db_instance" "postgres" {
   db_name                = "cerberes"
   username               = var.db_username
   password               = var.db_password
-  # Use the existing subnet group if available, otherwise use the new one
-  db_subnet_group_name   = length(data.aws_db_subnet_group.existing) > 0 ? data.aws_db_subnet_group.existing[0].name : aws_db_subnet_group.db_subnet_group[0].name
+  # Use the subnet group name from local variable
+  db_subnet_group_name   = local.subnet_group_name
   vpc_security_group_ids = [aws_security_group.db_sg.id]
   publicly_accessible    = false
   skip_final_snapshot    = true
@@ -93,8 +114,8 @@ resource "aws_db_instance" "postgres" {
   }
 }
 
-# Output the DB endpoint - handles both new and existing instances
+# Output the DB endpoint - using the local variable for safety
 output "db_endpoint" {
   description = "Database endpoint"
-  value       = length(data.aws_db_instance.existing) > 0 ? data.aws_db_instance.existing[0].endpoint : length(aws_db_instance.postgres) > 0 ? aws_db_instance.postgres[0].endpoint : "no-endpoint-available"
+  value       = local.db_endpoint
 } 

@@ -105,7 +105,7 @@ jobs:
             echo "SUBNET_GROUP_EXISTS=true" >> $GITHUB_ENV
             echo "✅ DB Subnet Group exists - will use existing one"
             # Modify the Terraform code to use the existing subnet group
-            sed -i 's/count = 0  # This is set to 0 by default, but the workflow will modify this file if the subnet group exists/count = 1  # Modified by workflow - subnet group exists/g' terraform/rds.tf
+            sed -i '/data "aws_db_subnet_group" "existing" {/,/count =/ s/count = 0/count = 1/g' terraform/rds.tf
           else
             echo "SUBNET_GROUP_EXISTS=false" >> $GITHUB_ENV
             echo "🆕 DB Subnet Group does not exist - will create new one"
@@ -116,7 +116,7 @@ jobs:
             echo "DB_INSTANCE_EXISTS=true" >> $GITHUB_ENV
             echo "✅ DB Instance exists - will use existing one"
             # Modify the Terraform code to use the existing DB instance
-            sed -i '/data "aws_db_instance" "existing" {/,/}/ s/count = 0/count = 1/g' terraform/rds.tf
+            sed -i '/data "aws_db_instance" "existing" {/,/count =/ s/count = 0/count = 1/g' terraform/rds.tf
           else
             echo "DB_INSTANCE_EXISTS=false" >> $GITHUB_ENV
             echo "🆕 DB Instance does not exist - will create new one"
