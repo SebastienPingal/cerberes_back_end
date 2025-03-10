@@ -101,7 +101,7 @@ locals {
 resource "aws_instance" "app_instance" {
   # Only create if no existing instances are found and we have a subnet and security group
   count                  = local.create_instance && local.subnet_id != null && local.sg_id != null ? 1 : 0
-  ami                    = "ami-01dd271720c1ba44f"  # Amazon Linux 2023 AMI for eu-west-1 (Ireland)
+  ami                    = "ami-01dd271720c1ba44f"  # Ubuntu 22.04 LTS AMI for eu-west-1 (Ireland)
   instance_type          = var.ec2_instance_type
   key_name               = var.ssh_key_name
   subnet_id              = local.subnet_id
@@ -109,17 +109,17 @@ resource "aws_instance" "app_instance" {
 
   user_data = <<-EOF
               #!/bin/bash
-              yum update -y
-              yum install -y nodejs npm git
+              apt-get update -y
+              apt-get install -y nodejs npm git
               npm install -g pnpm pm2
               
               # Create application directory
-              mkdir -p /home/ec2-user/app
-              chown -R ec2-user:ec2-user /home/ec2-user/app
+              mkdir -p /home/ubuntu/app
+              chown -R ubuntu:ubuntu /home/ubuntu/app
               
               # Configure PM2 to start on boot
               pm2 startup
-              env PATH=$PATH:/usr/bin pm2 startup systemd -u ec2-user --hp /home/ec2-user
+              env PATH=$PATH:/usr/bin pm2 startup systemd -u ubuntu --hp /home/ubuntu
               
               echo "EC2 instance setup complete"
               EOF

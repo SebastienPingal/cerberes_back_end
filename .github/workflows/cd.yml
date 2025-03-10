@@ -38,6 +38,13 @@ jobs:
             echo "AWS_REGION is NOT set ❌"
           fi
           
+          if [ -n "${{ secrets.JWT_SECRET }}" ]; then 
+            echo "JWT_SECRET is set ✅"
+          else
+            echo "JWT_SECRET is NOT set ❌"
+            echo "⚠️ JWT_SECRET is required for the application to function properly"
+          fi
+          
           if [ -n "${{ secrets.EC2_SSH_PRIVATE_KEY }}" ]; then 
             echo "EC2_SSH_PRIVATE_KEY is set ✅"
             # Check if the key starts with the correct format
@@ -237,6 +244,14 @@ jobs:
       - name: Deploy application to EC2
         if: steps.terraform-apply.outcome == 'success'
         run: |
+          # Create .env file for deployment
+          cat > .env << EOF
+          NODE_ENV=production
+          DATABASE_URL=postgres://${{ secrets.DB_USERNAME }}:${{ secrets.DB_PASSWORD }}@${{ env.DB_ENDPOINT }}/cerberes
+          JWT_SECRET=${{ secrets.JWT_SECRET }}
+          PORT=3000
+          EOF
+          
           # Use scp directly instead of the action
           scp -o StrictHostKeyChecking=no -i ~/.ssh/ec2_key -r dist/ package.json pnpm-lock.yaml .env ubuntu@${{ env.EC2_IP }}:/home/ubuntu/app/
           echo "📦 Files deployed to EC2"
@@ -247,13 +262,6 @@ jobs:
           # Use ssh directly instead of the action
           ssh -o StrictHostKeyChecking=no -i ~/.ssh/ec2_key ubuntu@${{ env.EC2_IP }} << 'EOF'
             cd /home/ubuntu/app
-            
-            # Add production environment variables
-            cat > .env << INNEREOF
-            NODE_ENV=production
-            DATABASE_URL=postgres://${{ secrets.DB_USERNAME }}:${{ secrets.DB_PASSWORD }}@${{ env.DB_ENDPOINT }}/cerberes
-            PORT=3000
-            INNEREOF
             
             # Install dependencies and start with PM2
             pnpm install --prod
