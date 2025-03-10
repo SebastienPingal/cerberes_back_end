@@ -424,6 +424,11 @@ jobs:
             if [[ "$NODE_VERSION" != "v18"* ]]; then
               echo "📦 Installing Node.js 18 LTS..."
               sudo apt update
+              # Remove conflicting packages first
+              sudo apt remove -y libnode-dev nodejs
+              # Clean up any broken dependencies
+              sudo apt autoremove -y
+              # Install Node.js 18
               curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
               sudo apt install -y nodejs
               echo "✅ Node.js $(node -v) installed"
@@ -442,6 +447,10 @@ jobs:
               sudo apt-get install -y postgresql-client
             fi
             
+            # Install network diagnostic tools
+            echo "📦 Installing network diagnostic tools..."
+            sudo apt-get install -y dnsutils traceroute net-tools
+            
             # Test database connection
             echo "🔍 Testing database connection..."
             DB_URL=$(grep DATABASE_URL .env | cut -d= -f2-)
@@ -454,18 +463,98 @@ jobs:
             echo "🔍 Database user: $DB_USER"
             echo "🔍 Database name: $DB_NAME"
             
+            # Get instance metadata for debugging
+            INSTANCE_ID=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)
+            PRIVATE_IP=$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)
+            SECURITY_GROUPS=$(curl -s http://169.254.169.254/latest/meta-data/security-groups)
+            
+            echo "🔍 EC2 Instance ID: $INSTANCE_ID"
+            echo "🔍 EC2 Private IP: $PRIVATE_IP"
+            echo "🔍 EC2 Security Groups: $SECURITY_GROUPS"
+            
             # Test connection with timeout
             if PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -c "SELECT 1" -t -A -w -q; then
               echo "✅ Database connection successful!"
             else
               echo "❌ Database connection failed!"
               echo "⚠️ Checking network connectivity to database..."
+              
+              # Try to resolve the hostname
+              echo "🔍 Resolving database hostname..."
+              host $DB_HOST || echo "❌ Cannot resolve hostname"
+              
+              # Check if we can reach the database port
+              echo "🔍 Testing connection to database port..."
               nc -zv "$DB_HOST" 5432 || echo "❌ Cannot connect to database port"
+              
+              # Get the RDS instance's private IP
+              echo "🔍 Getting RDS private IP..."
+              DB_IP=$(host $DB_HOST | grep "has address" | awk '{print $4}')
+              echo "🔍 RDS IP address: $DB_IP"
+              
+              # Check route to the database
+              echo "🔍 Checking route to database..."
+              traceroute -n $DB_HOST || echo "❌ Traceroute failed"
+              
+              # Check security group configuration
               echo "⚠️ Checking security group rules..."
-              curl -s http://169.254.169.254/latest/meta-data/security-groups
-              echo ""
-              curl -s http://169.254.169.254/latest/meta-data/local-ipv4
-              echo ""
+              echo "🔍 EC2 Security Groups: $SECURITY_GROUPS"
+              echo "🔍 EC2 Private IP: $PRIVATE_IP"
+              
+              # Try connecting with verbose output
+              echo "🔍 Trying connection with verbose output..."
+              PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -v -c "SELECT 1" || echo "❌ Verbose connection failed"
+              
+              echo "⚠️ Please check that the security group allows traffic from $PRIVATE_IP to the RDS instance on port 5432"
+              
+              # Try to install AWS CLI if not available
+              if ! command -v aws &> /dev/null; then
+                echo "📦 Installing AWS CLI..."
+                curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+                sudo apt-get install -y unzip
+                unzip awscliv2.zip
+                sudo ./aws/install
+                rm -rf aws awscliv2.zip
+              fi
+              
+              # If AWS CLI is available and credentials are set up, try to get security group info
+              if command -v aws &> /dev/null; then
+                echo "🔍 Checking if AWS CLI credentials are available..."
+                if aws sts get-caller-identity &> /dev/null; then
+                  echo "✅ AWS CLI credentials are available"
+                  
+                  # Get security group ID from metadata
+                  SG_NAME=$(curl -s http://169.254.169.254/latest/meta-data/security-groups)
+                  echo "🔍 Looking up security group ID for $SG_NAME..."
+                  
+                  # Get VPC ID
+                  MAC=$(curl -s http://169.254.169.254/latest/meta-data/mac)
+                  VPC_ID=$(curl -s http://169.254.169.254/latest/meta-data/network/interfaces/macs/$MAC/vpc-id)
+                  echo "🔍 VPC ID: $VPC_ID"
+                  
+                  # Get security group ID
+                  SG_ID=$(aws ec2 describe-security-groups --filters "Name=group-name,Values=$SG_NAME" "Name=vpc-id,Values=$VPC_ID" --query "SecurityGroups[0].GroupId" --output text)
+                  echo "🔍 Security Group ID: $SG_ID"
+                  
+                  # Check if the security group has the PostgreSQL rule
+                  echo "🔍 Checking PostgreSQL rule in security group..."
+                  PG_RULE=$(aws ec2 describe-security-groups --group-id $SG_ID --query "SecurityGroups[0].IpPermissions[?FromPort==\`5432\` && ToPort==\`5432\`].UserIdGroupPairs[?GroupId==\`$SG_ID\`].GroupId" --output text)
+                  
+                  if [ -z "$PG_RULE" ]; then
+                    echo "⚠️ PostgreSQL rule not found in security group"
+                    echo "🔧 Adding PostgreSQL rule to security group..."
+                    aws ec2 authorize-security-group-ingress \
+                      --group-id $SG_ID \
+                      --protocol tcp \
+                      --port 5432 \
+                      --source-group $SG_ID && echo "✅ PostgreSQL rule added successfully" || echo "❌ Failed to add PostgreSQL rule"
+                  else
+                    echo "✅ PostgreSQL rule found in security group"
+                  fi
+                else
+                  echo "⚠️ AWS CLI credentials not available"
+                fi
+              fi
             fi
             
             # Stop the application if it's running
