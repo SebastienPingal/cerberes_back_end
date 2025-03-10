@@ -481,17 +481,26 @@ jobs:
         run: |
           # Get EC2 and RDS security group information
           echo "🔧 Getting security group information..."
-          EC2_SG_ID=$(aws ec2 describe-security-groups --filters "Name=group-name,Values=cerberes-ec2-sg" --query "SecurityGroups[0].GroupId" --output text)
           
-          # Get RDS security group ID
-          DB_IDENTIFIER="cerberes-db"
-          DB_SG_ID=$(aws rds describe-db-instances --db-instance-identifier $DB_IDENTIFIER --query "DBInstances[0].VpcSecurityGroups[0].VpcSecurityGroupId" --output text)
+          # Get EC2 instance ID and security group
+          EC2_ID=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=cerberes-instance" "Name=instance-state-name,Values=running" --query "Reservations[0].Instances[0].InstanceId" --output text)
+          EC2_SG_ID=$(aws ec2 describe-instances --instance-ids $EC2_ID --query "Reservations[0].Instances[0].SecurityGroups[0].GroupId" --output text)
+          EC2_PRIVATE_IP=$(aws ec2 describe-instances --instance-ids $EC2_ID --query "Reservations[0].Instances[0].PrivateIpAddress" --output text)
           
+          # Get RDS instance ID and security group
+          DB_SG_ID=$(aws rds describe-db-instances --db-instance-identifier cerberes-db --query "DBInstances[0].VpcSecurityGroups[0].VpcSecurityGroupId" --output text)
+          DB_ENDPOINT=$(aws rds describe-db-instances --db-instance-identifier cerberes-db --query "DBInstances[0].Endpoint.Address" --output text)
+          DB_PRIVATE_IP=$(dig +short $DB_ENDPOINT || echo "Could not resolve DB endpoint")
+          
+          echo "🔍 EC2 Instance ID: $EC2_ID"
           echo "🔍 EC2 Security Group ID: $EC2_SG_ID"
+          echo "🔍 EC2 Private IP: $EC2_PRIVATE_IP"
           echo "🔍 RDS Security Group ID: $DB_SG_ID"
+          echo "🔍 RDS Endpoint: $DB_ENDPOINT"
+          echo "🔍 RDS Private IP: $DB_PRIVATE_IP"
           
           # Add rule to allow EC2 to connect to RDS
-          if [ "$EC2_SG_ID" != "None" ] && [ "$DB_SG_ID" != "None" ] && [ -n "$EC2_SG_ID" ] && [ -n "$DB_SG_ID" ]; then
+          if [ -n "$EC2_SG_ID" ] && [ -n "$DB_SG_ID" ]; then
             echo "🔧 Adding rule to allow EC2 security group to access RDS security group..."
             aws ec2 authorize-security-group-ingress \
               --group-id $DB_SG_ID \
@@ -499,14 +508,55 @@ jobs:
               --port 5432 \
               --source-group $EC2_SG_ID || echo "⚠️ Rule already exists or couldn't be added"
             
-            echo "✅ Added rule to allow EC2 to connect to RDS"
+            echo "✅ Added rule to allow EC2 security group to access RDS"
+            
+            # Also add a rule for the EC2 private IP specifically
+            echo "🔧 Adding rule to allow EC2 private IP to access RDS security group..."
+            aws ec2 authorize-security-group-ingress \
+              --group-id $DB_SG_ID \
+              --protocol tcp \
+              --port 5432 \
+              --cidr ${EC2_PRIVATE_IP}/32 || echo "⚠️ Rule already exists or couldn't be added"
+              
+            echo "✅ Added rule to allow EC2 private IP to access RDS"
+            
+            # Also add a rule to allow all traffic from the EC2 subnet
+            EC2_SUBNET=$(echo $EC2_PRIVATE_IP | cut -d. -f1-3).0/24
+            echo "🔧 Adding rule to allow EC2 subnet ($EC2_SUBNET) to access RDS security group..."
+            aws ec2 authorize-security-group-ingress \
+              --group-id $DB_SG_ID \
+              --protocol tcp \
+              --port 5432 \
+              --cidr $EC2_SUBNET || echo "⚠️ Rule already exists or couldn't be added"
+              
+            echo "✅ Added rule to allow EC2 subnet to access RDS"
           else
             echo "⚠️ Could not add security group rule - missing security group IDs"
           fi
           
+          # Create a temporary AWS credentials file to pass to the EC2 instance
+          echo "🔧 Creating temporary AWS credentials file..."
+          mkdir -p ~/.aws
+          cat > ~/.aws/temp_credentials << EOF
+          [default]
+          aws_access_key_id=${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws_secret_access_key=${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          region=${{ secrets.AWS_REGION }}
+          EOF
+          
+          # Transfer AWS credentials to the EC2 instance
+          echo "📦 Transferring AWS credentials to EC2 instance..."
+          scp -o StrictHostKeyChecking=no -o ConnectTimeout=60 -i ~/.ssh/ec2_key ~/.aws/temp_credentials ubuntu@${{ env.EC2_IP }}:/home/ubuntu/aws_credentials
+          
           # Use ssh directly instead of the action
           ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=60 -i ~/.ssh/ec2_key ubuntu@${{ env.EC2_IP }} << 'EOF'
             cd /home/ubuntu/app
+            
+            # Set up AWS credentials
+            echo "🔧 Setting up AWS credentials..."
+            mkdir -p ~/.aws
+            mv /home/ubuntu/aws_credentials ~/.aws/credentials
+            chmod 600 ~/.aws/credentials
             
             # Install newer version of Node.js
             echo "🔍 Checking Node.js version..."
@@ -534,6 +584,70 @@ jobs:
               sudo apt-get install -y postgresql-client
             fi
             
+            # Install network diagnostic tools
+            echo "📦 Installing network diagnostic tools..."
+            sudo apt-get install -y dnsutils traceroute net-tools iputils-ping
+            
+            # Install AWS CLI if not available
+            if ! command -v aws &> /dev/null; then
+              echo "📦 Installing AWS CLI..."
+              curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+              sudo apt-get install -y unzip
+              unzip awscliv2.zip
+              sudo ./aws/install
+              rm -rf aws awscliv2.zip
+            fi
+            
+            # Get instance metadata for debugging
+            echo "🔍 Getting instance metadata..."
+            INSTANCE_ID=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)
+            PRIVATE_IP=$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)
+            SECURITY_GROUPS=$(curl -s http://169.254.169.254/latest/meta-data/security-groups)
+            REGION=$(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone | sed 's/[a-z]$//')
+            
+            echo "🔍 EC2 Instance ID: $INSTANCE_ID"
+            echo "🔍 EC2 Private IP: $PRIVATE_IP"
+            echo "🔍 EC2 Security Groups: $SECURITY_GROUPS"
+            echo "🔍 Region: $REGION"
+            
+            # Get security group IDs
+            echo "🔧 Getting security group IDs..."
+            EC2_SG_ID=$(aws ec2 describe-security-groups --filters "Name=group-name,Values=$SECURITY_GROUPS" --query "SecurityGroups[0].GroupId" --output text)
+            echo "🔍 EC2 Security Group ID: $EC2_SG_ID"
+            
+            # Get RDS security group ID
+            DB_URL=$(grep DATABASE_URL .env | cut -d= -f2-)
+            DB_HOST=$(echo $DB_URL | sed -n 's/.*@\(.*\)\/.*/\1/p')
+            DB_IDENTIFIER=$(echo $DB_HOST | cut -d. -f1)
+            
+            echo "🔍 RDS Identifier: $DB_IDENTIFIER"
+            DB_SG_ID=$(aws rds describe-db-instances --db-instance-identifier $DB_IDENTIFIER --query "DBInstances[0].VpcSecurityGroups[0].VpcSecurityGroupId" --output text)
+            echo "🔍 RDS Security Group ID: $DB_SG_ID"
+            
+            # Add rule to allow EC2 to connect to RDS
+            if [ -n "$EC2_SG_ID" ] && [ -n "$DB_SG_ID" ] && [ "$EC2_SG_ID" != "None" ] && [ "$DB_SG_ID" != "None" ]; then
+              echo "🔧 Adding rule to allow EC2 security group to access RDS security group..."
+              aws ec2 authorize-security-group-ingress \
+                --group-id $DB_SG_ID \
+                --protocol tcp \
+                --port 5432 \
+                --source-group $EC2_SG_ID || echo "⚠️ Rule already exists or couldn't be added"
+              
+              echo "✅ Added rule to allow EC2 security group to access RDS"
+              
+              # Also add a rule for the EC2 private IP specifically
+              echo "🔧 Adding rule to allow EC2 private IP to access RDS security group..."
+              aws ec2 authorize-security-group-ingress \
+                --group-id $DB_SG_ID \
+                --protocol tcp \
+                --port 5432 \
+                --cidr ${PRIVATE_IP}/32 || echo "⚠️ Rule already exists or couldn't be added"
+                
+              echo "✅ Added rule to allow EC2 private IP to access RDS"
+            else
+              echo "⚠️ Could not add security group rule - missing security group IDs"
+            fi
+            
             # Test database connection
             echo "🔍 Testing database connection..."
             DB_URL=$(grep DATABASE_URL .env | cut -d= -f2-)
@@ -546,85 +660,36 @@ jobs:
             echo "🔍 Database user: $DB_USER"
             echo "🔍 Database name: $DB_NAME"
             
-            # Get instance metadata for debugging
-            INSTANCE_ID=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)
-            PRIVATE_IP=$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)
-            SECURITY_GROUPS=$(curl -s http://169.254.169.254/latest/meta-data/security-groups)
+            # Test basic network connectivity to the database
+            echo "🔍 Testing basic network connectivity to database..."
+            ping -c 3 $DB_HOST || echo "⚠️ Ping failed, but this might be expected if ICMP is blocked"
             
-            echo "🔍 EC2 Instance ID: $INSTANCE_ID"
-            echo "🔍 EC2 Private IP: $PRIVATE_IP"
-            echo "🔍 EC2 Security Groups: $SECURITY_GROUPS"
-            
-            # Install AWS CLI if not available
-            if ! command -v aws &> /dev/null; then
-              echo "📦 Installing AWS CLI..."
-              curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-              sudo apt-get install -y unzip
-              unzip awscliv2.zip
-              sudo ./aws/install
-              rm -rf aws awscliv2.zip
-            fi
-            
-            # Configure AWS CLI with instance profile credentials
-            echo "🔧 Configuring AWS CLI with instance profile credentials..."
-            TOKEN=$(curl -s -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600")
-            REGION=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/placement/region)
-            echo "🔍 Region: $REGION"
-            
-            # Get the security group IDs
-            echo "🔧 Getting security group IDs..."
-            MAC=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/mac)
-            VPC_ID=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/network/interfaces/macs/$MAC/vpc-id)
-            echo "🔍 VPC ID: $VPC_ID"
-            
-            # Get EC2 security group ID
-            EC2_SG_NAME=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/security-groups)
-            EC2_SG_ID=$(aws ec2 describe-security-groups --region $REGION --filters "Name=group-name,Values=$EC2_SG_NAME" "Name=vpc-id,Values=$VPC_ID" --query "SecurityGroups[0].GroupId" --output text)
-            echo "🔍 EC2 Security Group ID: $EC2_SG_ID"
-            
-            # Get RDS security group ID
-            DB_HOST_SHORT=$(echo $DB_HOST | cut -d'.' -f1)
-            DB_SG_NAME="${DB_HOST_SHORT}-sg"
-            echo "🔍 Looking for RDS security group with name pattern: *${DB_HOST_SHORT}*"
-            
-            # Try to find the RDS security group
-            DB_SG_ID=$(aws ec2 describe-security-groups --region $REGION --filters "Name=group-name,Values=*${DB_HOST_SHORT}*,*rds*,*db*" "Name=vpc-id,Values=$VPC_ID" --query "SecurityGroups[0].GroupId" --output text)
-            if [ "$DB_SG_ID" == "None" ]; then
-              echo "⚠️ Could not find RDS security group by name pattern"
-              # Try to find by looking at the DB instance
-              DB_IDENTIFIER=$(echo $DB_HOST_SHORT | sed 's/-db$//')
-              echo "🔍 Looking for RDS instance with identifier: $DB_IDENTIFIER"
-              DB_SG_ID=$(aws rds describe-db-instances --region $REGION --db-instance-identifier $DB_IDENTIFIER --query "DBInstances[0].VpcSecurityGroups[0].VpcSecurityGroupId" --output text 2>/dev/null || echo "None")
-            fi
-            
-            echo "🔍 RDS Security Group ID: $DB_SG_ID"
-            
-            # Add rule to allow EC2 to connect to RDS if both security groups were found
-            if [ "$EC2_SG_ID" != "None" ] && [ "$DB_SG_ID" != "None" ] && [ "$DB_SG_ID" != "" ]; then
-              echo "🔧 Adding rule to allow EC2 security group to access RDS security group..."
-              aws ec2 authorize-security-group-ingress --region $REGION \
-                --group-id $DB_SG_ID \
-                --protocol tcp \
-                --port 5432 \
-                --source-group $EC2_SG_ID || echo "⚠️ Rule already exists or couldn't be added"
-              
-              echo "✅ Added rule to allow EC2 to connect to RDS"
-            else
-              echo "⚠️ Could not add security group rule - missing security group IDs"
-            fi
+            # Test connection to database port
+            echo "🔍 Testing connection to database port..."
+            timeout 10 nc -zv $DB_HOST 5432 || echo "⚠️ Connection to port 5432 failed"
             
             # Test connection with timeout
+            echo "🔍 Testing PostgreSQL connection..."
             if PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -c "SELECT 1" -t -A -w -q; then
               echo "✅ Database connection successful!"
             else
               echo "❌ Database connection failed!"
               echo "⚠️ Checking network connectivity to database..."
-              nc -zv "$DB_HOST" 5432 || echo "❌ Cannot connect to database port"
-              echo "⚠️ Checking security group rules..."
-              curl -s http://169.254.169.254/latest/meta-data/security-groups
-              echo ""
-              curl -s http://169.254.169.254/latest/meta-data/local-ipv4
-              echo ""
+              
+              # Try to resolve the hostname
+              echo "🔍 Resolving database hostname..."
+              host $DB_HOST || echo "❌ Cannot resolve hostname"
+              
+              # Get the RDS instance's private IP
+              echo "🔍 Getting RDS private IP..."
+              DB_IP=$(host $DB_HOST | grep "has address" | awk '{print $4}')
+              echo "🔍 RDS IP address: $DB_IP"
+              
+              # Check route to the database
+              echo "🔍 Checking route to database..."
+              traceroute -n $DB_HOST || echo "❌ Traceroute failed"
+              
+              echo "⚠️ Please check that the security group allows traffic from $PRIVATE_IP to the RDS instance on port 5432"
             fi
             
             # Stop the application if it's running
