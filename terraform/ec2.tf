@@ -67,23 +67,15 @@ locals {
   create_instance = length(data.aws_instances.existing) == 0 ? true : length(data.aws_instances.existing) > 0 && length(data.aws_instances.existing[0].ids) == 0
   
   # Safe way to get the public IP
-  existing_ip = length(data.aws_instances.existing) > 0 ? (
-    length(data.aws_instances.existing[0].ids) > 0 ? (
-      length(data.aws_instances.existing[0].public_ips) > 0 ? data.aws_instances.existing[0].public_ips[0] : ""
-    ) : ""
-  ) : ""
+  existing_ip = length(data.aws_instances.existing) > 0 ? (length(data.aws_instances.existing[0].ids) > 0 ? (length(data.aws_instances.existing[0].public_ips) > 0 ? data.aws_instances.existing[0].public_ips[0] : "") : "") : ""
   
   new_instance_ip = length(aws_instance.app_instance) > 0 ? aws_instance.app_instance[0].public_ip : ""
   
   # Final IP to use
-  final_ip = local.existing_ip != "" ? local.existing_ip : (
-    local.new_instance_ip != "" ? local.new_instance_ip : "no-ip-available"
-  )
+  final_ip = local.existing_ip != "" ? local.existing_ip : (local.new_instance_ip != "" ? local.new_instance_ip : "no-ip-available")
   
   # Get the subnet ID to use
-  subnet_id = length(data.aws_subnets.public) > 0 && length(data.aws_subnets.public[0].ids) > 0 ? 
-              data.aws_subnets.public[0].ids[0] : 
-              length(aws_subnet.public_subnet) > 0 ? aws_subnet.public_subnet[0].id : null
+  subnet_id = length(data.aws_subnets.public) > 0 && length(data.aws_subnets.public[0].ids) > 0 ? data.aws_subnets.public[0].ids[0] : (length(aws_subnet.public_subnet) > 0 ? aws_subnet.public_subnet[0].id : null)
 }
 
 # EC2 Instance for hosting the application - only created if it doesn't already exist

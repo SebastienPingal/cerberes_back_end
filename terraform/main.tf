@@ -156,15 +156,10 @@ output "aws_region" {
 # Output the subnet IDs
 output "public_subnet_id" {
   description = "ID of the public subnet"
-  value       = length(data.aws_subnets.public) > 0 && length(data.aws_subnets.public[0].ids) > 0 ? 
-                data.aws_subnets.public[0].ids[0] : 
-                length(aws_subnet.public_subnet) > 0 ? aws_subnet.public_subnet[0].id : null
+  value       = length(data.aws_subnets.public) > 0 && length(data.aws_subnets.public[0].ids) > 0 ? data.aws_subnets.public[0].ids[0] : (length(aws_subnet.public_subnet) > 0 ? aws_subnet.public_subnet[0].id : null)
 }
 
 output "private_subnet_ids" {
   description = "IDs of the private subnets"
-  value       = length(data.aws_subnets.private) > 0 && length(data.aws_subnets.private[0].ids) >= 2 ? 
-                [data.aws_subnets.private[0].ids[0], data.aws_subnets.private[0].ids[1]] : 
-                length(aws_subnet.private_subnet_1) > 0 && length(aws_subnet.private_subnet_2) > 0 ? 
-                [aws_subnet.private_subnet_1[0].id, aws_subnet.private_subnet_2[0].id] : []
+  value       = length(data.aws_subnets.private) > 0 && length(data.aws_subnets.private[0].ids) >= 2 ? [data.aws_subnets.private[0].ids[0], data.aws_subnets.private[0].ids[1]] : (length(aws_subnet.private_subnet_1) > 0 && length(aws_subnet.private_subnet_2) > 0 ? [aws_subnet.private_subnet_1[0].id, aws_subnet.private_subnet_2[0].id] : [])
 } 

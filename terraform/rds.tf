@@ -70,10 +70,7 @@ locals {
   db_endpoint = length(data.aws_db_instance.existing) > 0 ? data.aws_db_instance.existing[0].endpoint : (length(aws_db_instance.postgres) > 0 ? aws_db_instance.postgres[0].endpoint : "no-endpoint-available")
   
   # Get the private subnet IDs to use
-  private_subnet_ids = length(data.aws_subnets.private) > 0 && length(data.aws_subnets.private[0].ids) >= 2 ? 
-                      [data.aws_subnets.private[0].ids[0], data.aws_subnets.private[0].ids[1]] : 
-                      length(aws_subnet.private_subnet_1) > 0 && length(aws_subnet.private_subnet_2) > 0 ? 
-                      [aws_subnet.private_subnet_1[0].id, aws_subnet.private_subnet_2[0].id] : []
+  private_subnet_ids = length(data.aws_subnets.private) > 0 && length(data.aws_subnets.private[0].ids) >= 2 ? [data.aws_subnets.private[0].ids[0], data.aws_subnets.private[0].ids[1]] : (length(aws_subnet.private_subnet_1) > 0 && length(aws_subnet.private_subnet_2) > 0 ? [aws_subnet.private_subnet_1[0].id, aws_subnet.private_subnet_2[0].id] : [])
 }
 
 # RDS PostgreSQL instance - only created if it doesn't already exist
