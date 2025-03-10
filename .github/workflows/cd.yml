@@ -174,27 +174,33 @@ jobs:
         working-directory: ./terraform
         run: terraform apply -auto-approve tfplan
 
+      # Get EC2 public IP directly from AWS CLI instead of Terraform output
       - name: Get EC2 public IP
         if: steps.terraform-apply.outcome == 'success'
-        working-directory: ./terraform
         id: ec2_ip
         run: |
-          # Get the IP address using a simpler approach
-          IP_ADDRESS=$(terraform output -raw public_ip | tr -d '\n')
-          # Set the output using the newer approach
-          echo "ip=$IP_ADDRESS" >> $GITHUB_OUTPUT
+          # Get the EC2 instance ID
+          EC2_ID=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=cerberes-instance" "Name=instance-state-name,Values=running" --query "Reservations[0].Instances[0].InstanceId" --output text)
+          
+          # Get the public IP directly from AWS CLI
+          IP_ADDRESS=$(aws ec2 describe-instances --instance-ids $EC2_ID --query "Reservations[0].Instances[0].PublicIpAddress" --output text)
+          
+          # Set the environment variable for use in subsequent steps
+          echo "EC2_IP=$IP_ADDRESS" >> $GITHUB_ENV
+          
           echo "🖥️ EC2 instance public IP: $IP_ADDRESS"
 
-      # Get RDS endpoint for database connection
+      # Get RDS endpoint directly from AWS CLI instead of Terraform output
       - name: Get RDS endpoint
         if: steps.terraform-apply.outcome == 'success'
-        working-directory: ./terraform
         id: rds_endpoint
         run: |
-          # Get the RDS endpoint using a simpler approach
-          DB_ENDPOINT=$(terraform output -raw db_endpoint | tr -d '\n')
-          # Set the output using the newer approach
-          echo "endpoint=$DB_ENDPOINT" >> $GITHUB_OUTPUT
+          # Get the RDS endpoint directly from AWS CLI
+          DB_ENDPOINT=$(aws rds describe-db-instances --db-instance-identifier cerberes-db --query "DBInstances[0].Endpoint.Address" --output text)
+          
+          # Set the environment variable for use in subsequent steps
+          echo "DB_ENDPOINT=$DB_ENDPOINT" >> $GITHUB_ENV
+          
           echo "🗄️ RDS endpoint: $DB_ENDPOINT"
 
       # Add a delay to ensure EC2 instance is fully initialized
@@ -208,7 +214,7 @@ jobs:
         if: steps.terraform-apply.outcome == 'success'
         uses: appleboy/scp-action@master
         with:
-          host: ${{ steps.ec2_ip.outputs.ip }}
+          host: ${{ env.EC2_IP }}
           username: ec2-user
           key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
           source: "dist/,package.json,pnpm-lock.yaml,.env"
@@ -218,7 +224,7 @@ jobs:
         if: steps.terraform-apply.outcome == 'success'
         uses: appleboy/ssh-action@master
         with:
-          host: ${{ steps.ec2_ip.outputs.ip }}
+          host: ${{ env.EC2_IP }}
           username: ec2-user
           key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
           script: |
@@ -227,7 +233,7 @@ jobs:
             # Add production environment variables
             cat > .env << EOF
             NODE_ENV=production
-            DATABASE_URL=postgres://${{ secrets.DB_USERNAME }}:${{ secrets.DB_PASSWORD }}@${{ steps.rds_endpoint.outputs.endpoint }}/cerberes
+            DATABASE_URL=postgres://${{ secrets.DB_USERNAME }}:${{ secrets.DB_PASSWORD }}@${{ env.DB_ENDPOINT }}/cerberes
             PORT=3000
             EOF
             
