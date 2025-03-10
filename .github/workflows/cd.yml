@@ -232,21 +232,21 @@ jobs:
           echo "🔑 SSH key file created"
           
           # Test SSH connection
-          ssh -o StrictHostKeyChecking=no -i ~/.ssh/ec2_key ec2-user@${{ env.EC2_IP }} "echo SSH connection test successful"
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/ec2_key ubuntu@${{ env.EC2_IP }} "echo SSH connection test successful"
 
       - name: Deploy application to EC2
         if: steps.terraform-apply.outcome == 'success'
         run: |
           # Use scp directly instead of the action
-          scp -o StrictHostKeyChecking=no -i ~/.ssh/ec2_key -r dist/ package.json pnpm-lock.yaml .env ec2-user@${{ env.EC2_IP }}:/home/ec2-user/app/
+          scp -o StrictHostKeyChecking=no -i ~/.ssh/ec2_key -r dist/ package.json pnpm-lock.yaml .env ubuntu@${{ env.EC2_IP }}:/home/ubuntu/app/
           echo "📦 Files deployed to EC2"
 
       - name: Configure and start application
         if: steps.terraform-apply.outcome == 'success'
         run: |
           # Use ssh directly instead of the action
-          ssh -o StrictHostKeyChecking=no -i ~/.ssh/ec2_key ec2-user@${{ env.EC2_IP }} << 'EOF'
-            cd /home/ec2-user/app
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/ec2_key ubuntu@${{ env.EC2_IP }} << 'EOF'
+            cd /home/ubuntu/app
             
             # Add production environment variables
             cat > .env << INNEREOF
