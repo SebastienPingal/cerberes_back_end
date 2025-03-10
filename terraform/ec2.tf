@@ -42,7 +42,7 @@ data "aws_instances" "existing" {
   }
 }
 
-# Local variable to determine if we should create a new instance
+# Local variables for EC2 instance
 locals {
   # Check if we should create a new instance - safely handle empty tuples
   create_instance = true  # Default to creating a new instance
@@ -62,11 +62,11 @@ locals {
   # Get the IP to use for output
   instance_ip = local.existing_ip != "" ? local.existing_ip : local.new_instance_ip
   
-  # Check if we already have an instance
-  instance_exists = length(data.aws_instances.existing.ids) > 0
+  # Check if we already have an instance - handle the count properly
+  instance_exists = length(data.aws_instances.existing) > 0 ? length(data.aws_instances.existing[0].ids) > 0 : false
   
   # Get the existing instance ID if available
-  existing_instance_id = local.instance_exists ? data.aws_instances.existing.ids[0] : null
+  existing_instance_id = local.instance_exists ? data.aws_instances.existing[0].ids[0] : null
 }
 
 # EC2 Instance for hosting the application
@@ -121,5 +121,11 @@ resource "aws_instance" "app_instance" {
 # Output the public IP - using the local variable for safety
 output "public_ip" {
   description = "Public IP address of the EC2 instance"
-  value       = local.instance_ip
+  value       = local.instance_exists && length(data.aws_instance.existing_instance) > 0 ? data.aws_instance.existing_instance[0].public_ip : (length(aws_instance.app_instance) > 0 ? aws_instance.app_instance[0].public_ip : "")
+}
+
+# Data source to get information about the existing instance if it exists
+data "aws_instance" "existing_instance" {
+  count       = local.instance_exists ? 1 : 0
+  instance_id = local.existing_instance_id
 }

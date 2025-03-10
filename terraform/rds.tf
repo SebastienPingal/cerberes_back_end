@@ -23,7 +23,7 @@ locals {
   # Get the subnet group name to use
   db_subnet_group_name = length(aws_db_subnet_group.db_subnet_group) > 0 ? aws_db_subnet_group.db_subnet_group[0].name : null
   
-  # Check if DB instance exists
+  # Check if DB instance exists - handle the count properly
   db_instance_exists = length(data.aws_db_instances.existing.instance_identifiers) > 0
 }
 
