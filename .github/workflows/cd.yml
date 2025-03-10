@@ -79,6 +79,8 @@ jobs:
           ec2_instance_type = "t2.micro"
           db_instance_class = "db.t3.micro"
           EOF
+          
+          echo "🔑 Created terraform.tfvars with database credentials"
 
       - name: Terraform Init
         working-directory: ./terraform
@@ -121,8 +123,21 @@ jobs:
         working-directory: ./terraform
         id: ec2_ip
         run: |
-          echo "EC2_IP=$(terraform output -raw public_ip)" >> $GITHUB_ENV
-          echo "🖥️ EC2 instance public IP: $(terraform output -raw public_ip)"
+          # Get the IP address and store it properly
+          IP_ADDRESS=$(terraform output -raw public_ip)
+          echo "EC2_IP=$IP_ADDRESS" >> $GITHUB_ENV
+          echo "🖥️ EC2 instance public IP: $IP_ADDRESS"
+
+      # Get RDS endpoint for database connection
+      - name: Get RDS endpoint
+        if: steps.terraform-apply.outcome == 'success'
+        working-directory: ./terraform
+        id: rds_endpoint
+        run: |
+          # Get the RDS endpoint and store it
+          DB_ENDPOINT=$(terraform output -raw db_endpoint)
+          echo "DB_ENDPOINT=$DB_ENDPOINT" >> $GITHUB_ENV
+          echo "🗄️ RDS endpoint: $DB_ENDPOINT"
 
       # Add a delay to ensure EC2 instance is fully initialized
       - name: Wait for EC2 instance to initialize
@@ -154,7 +169,7 @@ jobs:
             # Add production environment variables
             cat > .env << EOF
             NODE_ENV=production
-            DATABASE_URL=postgres://${{ secrets.DB_USERNAME }}:${{ secrets.DB_PASSWORD }}@$(terraform output -raw db_endpoint)/cerberes
+            DATABASE_URL=postgres://${{ secrets.DB_USERNAME }}:${{ secrets.DB_PASSWORD }}@${{ env.DB_ENDPOINT }}/cerberes
             PORT=3000
             EOF
             
