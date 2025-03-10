@@ -80,7 +80,7 @@ data "aws_instances" "existing" {
 
 # Local variable to determine if we should create a new instance
 locals {
-  create_instance = length(data.aws_instances.existing) == 0 ? true : length(data.aws_instances.existing) > 0 && length(data.aws_instances.existing[0].ids) == 0
+  create_instance = length(data.aws_instances.existing) == 0 ? true : length(data.aws_instances.existing[0].ids) == 0
   
   # Safe way to get the public IP
   existing_ip = length(data.aws_instances.existing) > 0 ? (length(data.aws_instances.existing[0].ids) > 0 ? (length(data.aws_instances.existing[0].public_ips) > 0 ? data.aws_instances.existing[0].public_ips[0] : "") : "") : ""
@@ -90,21 +90,18 @@ locals {
   # Final IP to use
   final_ip = local.existing_ip != "" ? local.existing_ip : (local.new_instance_ip != "" ? local.new_instance_ip : "no-ip-available")
   
-  # Get the subnet ID to use
-  subnet_id = length(data.aws_subnets.public) > 0 && length(data.aws_subnets.public[0].ids) > 0 ? data.aws_subnets.public[0].ids[0] : (length(aws_subnet.public_subnet) > 0 ? aws_subnet.public_subnet[0].id : null)
-  
-  # Get the security group ID to use
-  sg_id = length(data.aws_security_group.ec2_existing) > 0 ? data.aws_security_group.ec2_existing[0].id : length(aws_security_group.ec2_sg) > 0 ? aws_security_group.ec2_sg[0].id : null
+  # Use existing security group ID if provided via environment variable
+  use_existing_sg = var.existing_ec2_sg_id != ""
+  sg_id = local.use_existing_sg ? var.existing_ec2_sg_id : aws_security_group.ec2_sg[0].id
 }
 
-# EC2 Instance for hosting the application - only created if it doesn't already exist
+# EC2 Instance for hosting the application
 resource "aws_instance" "app_instance" {
-  # Only create if no existing instances are found and we have a subnet and security group
-  count                  = local.create_instance && local.subnet_id != null && local.sg_id != null ? 1 : 0
+  count                  = local.create_instance ? 1 : 0
   ami                    = "ami-01dd271720c1ba44f"  # Ubuntu 22.04 LTS AMI for eu-west-1 (Ireland)
   instance_type          = var.ec2_instance_type
   key_name               = var.ssh_key_name
-  subnet_id              = local.subnet_id
+  subnet_id              = aws_subnet.public_subnet[0].id
   vpc_security_group_ids = [local.sg_id]
 
   user_data = <<-EOF

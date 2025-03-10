@@ -37,4 +37,16 @@ variable "db_instance_class" {
   description = "RDS instance class"
   type        = string
   default     = "db.t3.micro"  # Free tier eligible
+}
+
+variable "existing_ec2_sg_id" {
+  description = "ID of an existing EC2 security group to use (if empty, a new one will be created)"
+  type        = string
+  default     = ""
+}
+
+variable "existing_db_sg_id" {
+  description = "ID of an existing RDS security group to use (if empty, a new one will be created)"
+  type        = string
+  default     = ""
 } 

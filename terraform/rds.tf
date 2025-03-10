@@ -73,15 +73,12 @@ data "aws_db_instance" "existing" {
 
 # Local variables for RDS
 locals {
-  # Determine if we need to create a new DB subnet group
-  create_subnet_group = length(data.aws_db_subnet_group.existing) == 0
-  
-  # Determine if we need to create a new RDS instance
   create_db_instance = length(data.aws_db_instance.existing) == 0
   
-  # Get the subnet group name safely
-  subnet_group_name = length(data.aws_db_subnet_group.existing) > 0 ? data.aws_db_subnet_group.existing[0].name : (length(aws_db_subnet_group.db_subnet_group) > 0 ? aws_db_subnet_group.db_subnet_group[0].name : "")
-                      
+  # Use existing security group ID if provided via environment variable
+  use_existing_db_sg = var.existing_db_sg_id != ""
+  db_sg_id = local.use_existing_db_sg ? var.existing_db_sg_id : aws_security_group.db_sg[0].id
+  
   # Get the DB endpoint safely
   db_endpoint = length(data.aws_db_instance.existing) > 0 ? data.aws_db_instance.existing[0].endpoint : (length(aws_db_instance.postgres) > 0 ? aws_db_instance.postgres[0].endpoint : "no-endpoint-available")
   
@@ -90,15 +87,12 @@ locals {
   
   # Get the EC2 security group ID to use
   ec2_sg_id = length(data.aws_security_group.ec2_existing) > 0 ? data.aws_security_group.ec2_existing[0].id : length(aws_security_group.ec2_sg) > 0 ? aws_security_group.ec2_sg[0].id : null
-  
-  # Get the DB security group ID to use
-  db_sg_id = length(data.aws_security_group.db_existing) > 0 ? data.aws_security_group.db_existing[0].id : length(aws_security_group.db_sg) > 0 ? aws_security_group.db_sg[0].id : null
 }
 
 # RDS PostgreSQL instance - only created if it doesn't already exist
 resource "aws_db_instance" "postgres" {
-  # Only create if the data lookup doesn't find an existing one and we have a subnet group and security group
-  count                  = local.create_db_instance && local.subnet_group_name != "" && local.db_sg_id != null ? 1 : 0
+  # Only create if the data lookup doesn't find an existing one
+  count                  = local.create_db_instance ? 1 : 0
   identifier             = "${var.app_name}-db"
   engine                 = "postgres"
   # Let AWS choose the default version by not specifying engine_version
@@ -109,7 +103,7 @@ resource "aws_db_instance" "postgres" {
   username               = var.db_username
   password               = var.db_password
   # Use the subnet group name from local variable
-  db_subnet_group_name   = local.subnet_group_name
+  db_subnet_group_name   = aws_db_subnet_group.db_subnet_group[0].name
   vpc_security_group_ids = [local.db_sg_id]
   publicly_accessible    = false
   skip_final_snapshot    = true
