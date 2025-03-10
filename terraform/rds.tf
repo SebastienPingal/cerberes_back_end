@@ -11,11 +11,9 @@ resource "aws_db_subnet_group" "db_subnet_group" {
 }
 
 # Check for existing DB subnet group
-data "aws_db_subnet_groups" "existing" {
-  filter {
-    name   = "db-subnet-group-name"
-    values = ["${var.app_name}-db-subnet-group"]
-  }
+data "aws_db_subnet_group" "existing" {
+  count = 0
+  name  = "${var.app_name}-db-subnet-group"
 }
 
 # Check for existing RDS instance
