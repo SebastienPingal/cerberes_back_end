@@ -269,12 +269,8 @@ jobs:
           echo "📦 Transferring built code..."
           scp -o StrictHostKeyChecking=no -o ConnectTimeout=60 -C -i ~/.ssh/ec2_key -r dist/ ubuntu@${{ env.EC2_IP }}:/home/ubuntu/app/
           
-          echo "📦 Creating production dependencies on server..."
-          ssh -o StrictHostKeyChecking=no -i ~/.ssh/ec2_key ubuntu@${{ env.EC2_IP }} << 'EOF'
-            cd /home/ubuntu/app
-            npm install -g pnpm
-            pnpm install --prod
-          EOF
+          echo "📦 Transferring node_modules directory..."
+          scp -o StrictHostKeyChecking=no -o ConnectTimeout=60 -C -i ~/.ssh/ec2_key -r node_modules/ ubuntu@${{ env.EC2_IP }}:/home/ubuntu/app/
           
           echo "📦 Files deployed to EC2"
 
@@ -285,14 +281,20 @@ jobs:
           ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=60 -i ~/.ssh/ec2_key ubuntu@${{ env.EC2_IP }} << 'EOF'
             cd /home/ubuntu/app
             
-            # Ensure required software is installed
-            echo "🔍 Checking for required software..."
-            if ! command -v nodejs &> /dev/null; then
-              echo "📦 Installing Node.js and npm..."
+            # Install newer version of Node.js
+            echo "🔍 Checking Node.js version..."
+            NODE_VERSION=$(node -v)
+            echo "Current Node.js version: $NODE_VERSION"
+            
+            if [[ "$NODE_VERSION" != "v18"* ]]; then
+              echo "📦 Installing Node.js 18 LTS..."
               sudo apt update
-              sudo apt install -y nodejs npm
+              curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+              sudo apt install -y nodejs
+              echo "✅ Node.js $(node -v) installed"
             fi
             
+            # Install PM2 globally
             if ! command -v pm2 &> /dev/null; then
               echo "📦 Installing PM2..."
               sudo npm install -g pm2
