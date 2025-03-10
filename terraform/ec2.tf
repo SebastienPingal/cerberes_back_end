@@ -13,9 +13,9 @@ data "aws_security_group" "ec2_existing" {
   }
 }
 
-# Security group for EC2 - only created if it doesn't already exist
+# Security group for EC2
 resource "aws_security_group" "ec2_sg" {
-  count       = length(data.aws_security_group.ec2_existing) > 0 ? 0 : 1
+  count       = var.existing_ec2_sg_id == "" ? 1 : 0
   name        = "${var.app_name}-ec2-sg"
   description = "Security group for EC2 instance"
   vpc_id      = local.vpc_id

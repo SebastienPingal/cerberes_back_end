@@ -13,9 +13,9 @@ data "aws_security_group" "db_existing" {
   }
 }
 
-# Security group for RDS - only created if it doesn't already exist
+# Security group for RDS
 resource "aws_security_group" "db_sg" {
-  count       = length(data.aws_security_group.db_existing) > 0 ? 0 : 1
+  count       = var.existing_db_sg_id == "" ? 1 : 0
   name        = "${var.app_name}-db-sg"
   description = "Security group for RDS database"
   vpc_id      = local.vpc_id
@@ -25,7 +25,7 @@ resource "aws_security_group" "db_sg" {
     from_port       = 5432
     to_port         = 5432
     protocol        = "tcp"
-    security_groups = [local.ec2_sg_id]
+    security_groups = [var.existing_ec2_sg_id != "" ? var.existing_ec2_sg_id : aws_security_group.ec2_sg[0].id]
   }
 
   egress {
@@ -79,14 +79,14 @@ locals {
   use_existing_db_sg = var.existing_db_sg_id != ""
   db_sg_id = local.use_existing_db_sg ? var.existing_db_sg_id : aws_security_group.db_sg[0].id
   
+  # Get the EC2 security group ID to use
+  ec2_sg_id = var.existing_ec2_sg_id != "" ? var.existing_ec2_sg_id : aws_security_group.ec2_sg[0].id
+  
   # Get the DB endpoint safely
   db_endpoint = length(data.aws_db_instance.existing) > 0 ? data.aws_db_instance.existing[0].endpoint : (length(aws_db_instance.postgres) > 0 ? aws_db_instance.postgres[0].endpoint : "no-endpoint-available")
   
   # Get the private subnet IDs to use
   private_subnet_ids = length(data.aws_subnets.private) > 0 && length(data.aws_subnets.private[0].ids) >= 2 ? [data.aws_subnets.private[0].ids[0], data.aws_subnets.private[0].ids[1]] : (length(aws_subnet.private_subnet_1) > 0 && length(aws_subnet.private_subnet_2) > 0 ? [aws_subnet.private_subnet_1[0].id, aws_subnet.private_subnet_2[0].id] : [])
-  
-  # Get the EC2 security group ID to use
-  ec2_sg_id = length(data.aws_security_group.ec2_existing) > 0 ? data.aws_security_group.ec2_existing[0].id : length(aws_security_group.ec2_sg) > 0 ? aws_security_group.ec2_sg[0].id : null
 }
 
 # RDS PostgreSQL instance - only created if it doesn't already exist
