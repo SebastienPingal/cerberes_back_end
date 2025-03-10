@@ -82,36 +82,48 @@ jobs:
           
           echo "🔑 Created terraform.tfvars with database credentials"
 
-      # Check for existing DB subnet group and modify Terraform code if it exists
-      - name: Check for existing DB subnet group
-        id: check-subnet-group
+      # Check for existing resources and modify Terraform code accordingly
+      - name: Check for existing resources
+        id: check-resources
         run: |
+          # Check if EC2 instances with the tag Name=cerberes-instance exist
+          EC2_INSTANCES=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=cerberes-instance" "Name=instance-state-name,Values=running,stopped" --query "Reservations[*].Instances[*].InstanceId" --output text)
+          
+          if [ -n "$EC2_INSTANCES" ]; then
+            echo "EC2_INSTANCE_EXISTS=true" >> $GITHUB_ENV
+            echo "✅ EC2 Instance exists - will use existing one: $EC2_INSTANCES"
+            # Modify the Terraform code to use the existing EC2 instance
+            sed -i '/data "aws_instances" "existing" {/,/}/ s/count = 0/count = 1/g' terraform/ec2.tf
+          else
+            echo "EC2_INSTANCE_EXISTS=false" >> $GITHUB_ENV
+            echo "🆕 EC2 Instance does not exist - will create new one"
+          fi
+          
+          # Check if DB subnet group exists
           if aws rds describe-db-subnet-groups --db-subnet-group-name cerberes-db-subnet-group &> /dev/null; then
             echo "SUBNET_GROUP_EXISTS=true" >> $GITHUB_ENV
             echo "✅ DB Subnet Group exists - will use existing one"
             # Modify the Terraform code to use the existing subnet group
-            sed -i 's/count = 0/count = 1/g' terraform/rds.tf
+            sed -i 's/count = 0  # This is set to 0 by default, but the workflow will modify this file if the subnet group exists/count = 1  # Modified by workflow - subnet group exists/g' terraform/rds.tf
           else
             echo "SUBNET_GROUP_EXISTS=false" >> $GITHUB_ENV
             echo "🆕 DB Subnet Group does not exist - will create new one"
+          fi
+          
+          # Check if DB instance exists
+          if aws rds describe-db-instances --db-instance-identifier cerberes-db &> /dev/null; then
+            echo "DB_INSTANCE_EXISTS=true" >> $GITHUB_ENV
+            echo "✅ DB Instance exists - will use existing one"
+            # Modify the Terraform code to use the existing DB instance
+            sed -i '/data "aws_db_instance" "existing" {/,/}/ s/count = 0/count = 1/g' terraform/rds.tf
+          else
+            echo "DB_INSTANCE_EXISTS=false" >> $GITHUB_ENV
+            echo "🆕 DB Instance does not exist - will create new one"
           fi
 
       - name: Terraform Init
         working-directory: ./terraform
         run: terraform init
-
-      # Check for existing resources
-      - name: Check for existing resources
-        id: check-resources
-        working-directory: ./terraform
-        continue-on-error: true
-        run: |
-          # Check if DB instance exists
-          if aws rds describe-db-instances --db-instance-identifier cerberes-db &> /dev/null; then
-            echo "⚠️ DB Instance exists - will update if needed"
-          else
-            echo "🆕 DB Instance does not exist - will create new one"
-          fi
 
       - name: Terraform Plan
         working-directory: ./terraform

@@ -48,8 +48,17 @@ resource "aws_db_subnet_group" "db_subnet_group" {
   }
 }
 
-# RDS PostgreSQL instance
+# Use existing RDS instance if it exists
+# This is handled in the workflow by checking for existing resources
+data "aws_db_instance" "existing" {
+  db_instance_identifier = "${var.app_name}-db"
+  count = 0  # This is set to 0 by default, but the workflow will modify this file if the instance exists
+}
+
+# RDS PostgreSQL instance - only created if it doesn't already exist
 resource "aws_db_instance" "postgres" {
+  # Only create if the data lookup doesn't find an existing one
+  count                  = length(data.aws_db_instance.existing) > 0 ? 0 : 1
   identifier             = "${var.app_name}-db"
   engine                 = "postgres"
   # Let AWS choose the default version by not specifying engine_version
@@ -84,7 +93,8 @@ resource "aws_db_instance" "postgres" {
   }
 }
 
+# Output the DB endpoint - handles both new and existing instances
 output "db_endpoint" {
   description = "Database endpoint"
-  value       = aws_db_instance.postgres.endpoint
+  value       = length(data.aws_db_instance.existing) > 0 ? data.aws_db_instance.existing[0].endpoint : length(aws_db_instance.postgres) > 0 ? aws_db_instance.postgres[0].endpoint : "no-endpoint-available"
 } 

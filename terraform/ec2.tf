@@ -46,8 +46,26 @@ resource "aws_security_group" "ec2_sg" {
   }
 }
 
-# EC2 Instance for hosting the application
+# Use existing EC2 instance if it exists
+# This is handled in the workflow by checking for existing resources
+data "aws_instances" "existing" {
+  filter {
+    name   = "tag:Name"
+    values = ["${var.app_name}-instance"]
+  }
+  
+  filter {
+    name   = "instance-state-name"
+    values = ["running", "stopped"]
+  }
+  
+  count = 0  # This is set to 0 by default, but the workflow will modify this file if instances exist
+}
+
+# EC2 Instance for hosting the application - only created if it doesn't already exist
 resource "aws_instance" "app_instance" {
+  # Only create if the data lookup doesn't find an existing one
+  count                  = length(data.aws_instances.existing) > 0 && length(data.aws_instances.existing[0].ids) > 0 ? 0 : 1
   ami                    = "ami-01dd271720c1ba44f"  # Amazon Linux 2023 AMI for eu-west-1 (Ireland)
   instance_type          = var.ec2_instance_type
   key_name               = var.ssh_key_name
@@ -74,21 +92,10 @@ resource "aws_instance" "app_instance" {
   tags = {
     Name = "${var.app_name}-instance"
   }
-  
-  # Prevent unnecessary replacement of the instance
-  lifecycle {
-    ignore_changes = [
-      ami,              # Allow AMI updates without recreation
-      user_data,        # Allow user_data changes without recreation
-      tags              # Allow tag changes without recreation
-    ]
-  }
 }
 
-# REMOVED: Elastic IP for EC2 instance (to stay within free tier)
-# Using the auto-assigned public IP instead
-
+# Output the public IP - handles both new and existing instances
 output "public_ip" {
   description = "Public IP address of the EC2 instance"
-  value       = aws_instance.app_instance.public_ip
+  value       = length(data.aws_instances.existing) > 0 && length(data.aws_instances.existing[0].ids) > 0 ? data.aws_instances.existing[0].public_ips[0] : length(aws_instance.app_instance) > 0 ? aws_instance.app_instance[0].public_ip : "no-ip-available"
 }
