@@ -62,10 +62,15 @@ data "aws_instances" "existing" {
   count = 0  # This is set to 0 by default, but the workflow will modify this file if instances exist
 }
 
+# Local variable to determine if we should create a new instance
+locals {
+  create_instance = length(data.aws_instances.existing) == 0 ? true : length(data.aws_instances.existing) > 0 && length(data.aws_instances.existing[0].ids) == 0
+}
+
 # EC2 Instance for hosting the application - only created if it doesn't already exist
 resource "aws_instance" "app_instance" {
-  # Only create if the data lookup doesn't find an existing one
-  count                  = length(data.aws_instances.existing) > 0 && length(data.aws_instances.existing[0].ids) > 0 ? 0 : 1
+  # Only create if no existing instances are found
+  count                  = local.create_instance ? 1 : 0
   ami                    = "ami-01dd271720c1ba44f"  # Amazon Linux 2023 AMI for eu-west-1 (Ireland)
   instance_type          = var.ec2_instance_type
   key_name               = var.ssh_key_name

@@ -87,13 +87,14 @@ jobs:
         id: check-resources
         run: |
           # Check if EC2 instances with the tag Name=cerberes-instance exist
-          EC2_INSTANCES=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=cerberes-instance" "Name=instance-state-name,Values=running,stopped" --query "Reservations[*].Instances[*].InstanceId" --output text)
+          EC2_COUNT=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=cerberes-instance" "Name=instance-state-name,Values=running,stopped" --query "length(Reservations[*].Instances[*])" --output text)
           
-          if [ -n "$EC2_INSTANCES" ]; then
+          if [ "$EC2_COUNT" -gt "0" ]; then
             echo "EC2_INSTANCE_EXISTS=true" >> $GITHUB_ENV
-            echo "✅ EC2 Instance exists - will use existing one: $EC2_INSTANCES"
+            EC2_ID=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=cerberes-instance" "Name=instance-state-name,Values=running,stopped" --query "Reservations[0].Instances[0].InstanceId" --output text)
+            echo "✅ EC2 Instance exists - will use existing one: $EC2_ID"
             # Modify the Terraform code to use the existing EC2 instance
-            sed -i '/data "aws_instances" "existing" {/,/}/ s/count = 0/count = 1/g' terraform/ec2.tf
+            sed -i '/data "aws_instances" "existing" {/,/count =/ s/count = 0/count = 1/g' terraform/ec2.tf
           else
             echo "EC2_INSTANCE_EXISTS=false" >> $GITHUB_ENV
             echo "🆕 EC2 Instance does not exist - will create new one"
