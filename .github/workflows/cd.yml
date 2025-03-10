@@ -179,11 +179,10 @@ jobs:
         working-directory: ./terraform
         id: ec2_ip
         run: |
-          # Get the IP address and store it properly
-          # Use grep to extract just the IP address
-          IP_OUTPUT=$(terraform output -raw public_ip)
-          IP_ADDRESS=$(echo "$IP_OUTPUT" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' || echo "$IP_OUTPUT")
-          echo "EC2_IP=$IP_ADDRESS" >> $GITHUB_ENV
+          # Get the IP address using a simpler approach
+          IP_ADDRESS=$(terraform output -raw public_ip | tr -d '\n')
+          # Set the output directly as a step output
+          echo "::set-output name=ip::$IP_ADDRESS"
           echo "🖥️ EC2 instance public IP: $IP_ADDRESS"
 
       # Get RDS endpoint for database connection
@@ -192,35 +191,34 @@ jobs:
         working-directory: ./terraform
         id: rds_endpoint
         run: |
-          # Get the RDS endpoint and store it
-          # Use grep to extract just the endpoint
-          DB_OUTPUT=$(terraform output -raw db_endpoint)
-          DB_ENDPOINT=$(echo "$DB_OUTPUT" | grep -oE '[a-zA-Z0-9.-]+\.rds\.amazonaws\.com(:[0-9]+)?' || echo "$DB_OUTPUT")
-          echo "DB_ENDPOINT=$DB_ENDPOINT" >> $GITHUB_ENV
+          # Get the RDS endpoint using a simpler approach
+          DB_ENDPOINT=$(terraform output -raw db_endpoint | tr -d '\n')
+          # Set the output directly as a step output
+          echo "::set-output name=endpoint::$DB_ENDPOINT"
           echo "🗄️ RDS endpoint: $DB_ENDPOINT"
 
       # Add a delay to ensure EC2 instance is fully initialized
       - name: Wait for EC2 instance to initialize
-        if: steps.terraform-apply.outcome == 'success' && env.EC2_IP != ''
+        if: steps.terraform-apply.outcome == 'success'
         run: |
           echo "⏳ Waiting 60 seconds for EC2 instance to fully initialize..."
           sleep 60
 
       - name: Deploy application to EC2
-        if: steps.terraform-apply.outcome == 'success' && env.EC2_IP != ''
+        if: steps.terraform-apply.outcome == 'success'
         uses: appleboy/scp-action@master
         with:
-          host: ${{ env.EC2_IP }}
+          host: ${{ steps.ec2_ip.outputs.ip }}
           username: ec2-user
           key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
           source: "dist/,package.json,pnpm-lock.yaml,.env"
           target: "/home/ec2-user/app"
 
       - name: Configure and start application
-        if: steps.terraform-apply.outcome == 'success' && env.EC2_IP != ''
+        if: steps.terraform-apply.outcome == 'success'
         uses: appleboy/ssh-action@master
         with:
-          host: ${{ env.EC2_IP }}
+          host: ${{ steps.ec2_ip.outputs.ip }}
           username: ec2-user
           key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
           script: |
@@ -229,7 +227,7 @@ jobs:
             # Add production environment variables
             cat > .env << EOF
             NODE_ENV=production
-            DATABASE_URL=postgres://${{ secrets.DB_USERNAME }}:${{ secrets.DB_PASSWORD }}@${{ env.DB_ENDPOINT }}/cerberes
+            DATABASE_URL=postgres://${{ secrets.DB_USERNAME }}:${{ secrets.DB_PASSWORD }}@${{ steps.rds_endpoint.outputs.endpoint }}/cerberes
             PORT=3000
             EOF
             
