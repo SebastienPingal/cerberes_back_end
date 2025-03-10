@@ -13,36 +13,10 @@ data "aws_security_group" "db_existing" {
   }
 }
 
-# Security group for RDS
-resource "aws_security_group" "db_sg" {
-  count       = var.existing_db_sg_id == "" ? 1 : 0
-  name        = "${var.app_name}-db-sg"
-  description = "Security group for RDS database"
-  vpc_id      = local.vpc_id
-
-  # PostgreSQL access from EC2 security group
-  ingress {
-    from_port       = 5432
-    to_port         = 5432
-    protocol        = "tcp"
-    security_groups = [var.existing_ec2_sg_id != "" ? var.existing_ec2_sg_id : aws_security_group.ec2_sg[0].id]
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = {
-    Name = "${var.app_name}-db-sg"
-  }
-
-  # Allow replacement of security group if it exists
-  lifecycle {
-    create_before_destroy = true
-  }
+# Look for existing RDS security group
+data "aws_security_group" "db_sg" {
+  name   = "${var.app_name}-db-sg"
+  vpc_id = local.vpc_id
 }
 
 # Use an existing DB subnet group if it exists
@@ -75,13 +49,6 @@ data "aws_db_instance" "existing" {
 locals {
   create_db_instance = length(data.aws_db_instance.existing) == 0
   
-  # Use existing security group ID if provided via environment variable
-  use_existing_db_sg = var.existing_db_sg_id != ""
-  db_sg_id = local.use_existing_db_sg ? var.existing_db_sg_id : aws_security_group.db_sg[0].id
-  
-  # Get the EC2 security group ID to use
-  ec2_sg_id = var.existing_ec2_sg_id != "" ? var.existing_ec2_sg_id : aws_security_group.ec2_sg[0].id
-  
   # Get the DB endpoint safely
   db_endpoint = length(data.aws_db_instance.existing) > 0 ? data.aws_db_instance.existing[0].endpoint : (length(aws_db_instance.postgres) > 0 ? aws_db_instance.postgres[0].endpoint : "no-endpoint-available")
   
@@ -89,29 +56,26 @@ locals {
   private_subnet_ids = length(data.aws_subnets.private) > 0 && length(data.aws_subnets.private[0].ids) >= 2 ? [data.aws_subnets.private[0].ids[0], data.aws_subnets.private[0].ids[1]] : (length(aws_subnet.private_subnet_1) > 0 && length(aws_subnet.private_subnet_2) > 0 ? [aws_subnet.private_subnet_1[0].id, aws_subnet.private_subnet_2[0].id] : [])
 }
 
-# RDS PostgreSQL instance - only created if it doesn't already exist
+# RDS PostgreSQL instance
 resource "aws_db_instance" "postgres" {
   # Only create if the data lookup doesn't find an existing one
   count                  = local.create_db_instance ? 1 : 0
   identifier             = "${var.app_name}-db"
   engine                 = "postgres"
-  # Let AWS choose the default version by not specifying engine_version
   instance_class         = var.db_instance_class
-  allocated_storage      = 10      # Reduced to 10GB to stay well within free tier
+  allocated_storage      = 10
   storage_type           = "gp2"
   db_name                = "cerberes"
   username               = var.db_username
   password               = var.db_password
-  # Use the subnet group name from local variable
   db_subnet_group_name   = aws_db_subnet_group.db_subnet_group[0].name
-  vpc_security_group_ids = [local.db_sg_id]
+  vpc_security_group_ids = [data.aws_security_group.db_sg.id]
   publicly_accessible    = false
   skip_final_snapshot    = true
-  backup_retention_period = 1      # Reduced to 1 day to minimize storage usage
+  backup_retention_period = 1
   
-  # Free tier optimizations
-  multi_az               = false   # Multi-AZ is not free tier eligible
-  performance_insights_enabled = false # Performance Insights is not free tier eligible
+  multi_az               = false
+  performance_insights_enabled = false
   
   tags = {
     Name = "${var.app_name}-db"

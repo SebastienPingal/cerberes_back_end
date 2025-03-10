@@ -131,14 +131,41 @@ jobs:
             echo "EC2_SG_EXISTS=true" >> $GITHUB_ENV
             echo "EC2_SG_ID=$EC2_SG_ID" >> $GITHUB_ENV
             echo "✅ EC2 Security Group exists - will use existing one: $EC2_SG_ID"
-            # Instead of modifying count, pass the ID as a variable
-            echo "TF_VAR_existing_ec2_sg_id=$EC2_SG_ID" >> $GITHUB_ENV
-            echo "existing_ec2_sg_id=\"$EC2_SG_ID\"" >> terraform/terraform.auto.tfvars
           else
             echo "EC2_SG_EXISTS=false" >> $GITHUB_ENV
             echo "🆕 EC2 Security Group does not exist - will create new one"
-            echo "TF_VAR_existing_ec2_sg_id=" >> $GITHUB_ENV
-            echo "existing_ec2_sg_id=\"\"" >> terraform/terraform.auto.tfvars
+            
+            # Create EC2 security group
+            echo "🔧 Creating EC2 security group..."
+            EC2_SG_ID=$(aws ec2 create-security-group \
+              --group-name cerberes-ec2-sg \
+              --description "Security group for EC2 instance" \
+              --vpc-id $DEFAULT_VPC_ID \
+              --query "GroupId" --output text)
+            
+            # Add SSH access
+            aws ec2 authorize-security-group-ingress \
+              --group-id $EC2_SG_ID \
+              --protocol tcp \
+              --port 22 \
+              --cidr 0.0.0.0/0
+              
+            # Add HTTP access
+            aws ec2 authorize-security-group-ingress \
+              --group-id $EC2_SG_ID \
+              --protocol tcp \
+              --port 80 \
+              --cidr 0.0.0.0/0
+              
+            # Add application port access
+            aws ec2 authorize-security-group-ingress \
+              --group-id $EC2_SG_ID \
+              --protocol tcp \
+              --port 3000 \
+              --cidr 0.0.0.0/0
+              
+            echo "EC2_SG_ID=$EC2_SG_ID" >> $GITHUB_ENV
+            echo "✅ Created EC2 security group: $EC2_SG_ID"
           fi
           
           # Get RDS security group ID and update its rules
@@ -147,31 +174,37 @@ jobs:
             echo "DB_SG_EXISTS=true" >> $GITHUB_ENV
             echo "DB_SG_ID=$RDS_SG_ID" >> $GITHUB_ENV
             echo "✅ DB Security Group exists - will use existing one: $RDS_SG_ID"
-            # Instead of modifying count, pass the ID as a variable
-            echo "TF_VAR_existing_db_sg_id=$RDS_SG_ID" >> $GITHUB_ENV
-            echo "existing_db_sg_id=\"$RDS_SG_ID\"" >> terraform/terraform.auto.tfvars
-            
-            # Check if the EC2 security group rule exists and add it if needed
-            if [ "$EC2_SG_ID" != "None" ]; then
-              RULE_EXISTS=$(aws ec2 describe-security-groups --group-id $RDS_SG_ID --query "SecurityGroups[0].IpPermissions[?FromPort==\`5432\` && ToPort==\`5432\` && contains(UserIdGroupPairs[*].GroupId, \`$EC2_SG_ID\`)].FromPort" --output text)
-              
-              if [ -z "$RULE_EXISTS" ]; then
-                echo "🔧 Adding EC2 security group to RDS ingress rules..."
-                aws ec2 authorize-security-group-ingress \
-                  --group-id $RDS_SG_ID \
-                  --protocol tcp \
-                  --port 5432 \
-                  --source-group $EC2_SG_ID
-                echo "✅ Added EC2 security group to RDS ingress rules"
-              else
-                echo "✅ RDS security group already allows access from EC2"
-              fi
-            fi
           else
             echo "DB_SG_EXISTS=false" >> $GITHUB_ENV
             echo "🆕 DB Security Group does not exist - will create new one"
-            echo "TF_VAR_existing_db_sg_id=" >> $GITHUB_ENV
-            echo "existing_db_sg_id=\"\"" >> terraform/terraform.auto.tfvars
+            
+            # Create RDS security group
+            echo "🔧 Creating RDS security group..."
+            RDS_SG_ID=$(aws ec2 create-security-group \
+              --group-name cerberes-db-sg \
+              --description "Security group for RDS database" \
+              --vpc-id $DEFAULT_VPC_ID \
+              --query "GroupId" --output text)
+              
+            echo "DB_SG_ID=$RDS_SG_ID" >> $GITHUB_ENV
+            echo "✅ Created RDS security group: $RDS_SG_ID"
+          fi
+          
+          # Check if the EC2 security group rule exists and add it if needed
+          if [ "$EC2_SG_ID" != "None" ] && [ "$RDS_SG_ID" != "None" ]; then
+            RULE_EXISTS=$(aws ec2 describe-security-groups --group-id $RDS_SG_ID --query "SecurityGroups[0].IpPermissions[?FromPort==\`5432\` && ToPort==\`5432\` && contains(UserIdGroupPairs[*].GroupId, \`$EC2_SG_ID\`)].FromPort" --output text)
+            
+            if [ -z "$RULE_EXISTS" ]; then
+              echo "🔧 Adding EC2 security group to RDS ingress rules..."
+              aws ec2 authorize-security-group-ingress \
+                --group-id $RDS_SG_ID \
+                --protocol tcp \
+                --port 5432 \
+                --source-group $EC2_SG_ID
+              echo "✅ Added EC2 security group to RDS ingress rules"
+            else
+              echo "✅ RDS security group already allows access from EC2"
+            fi
           fi
           
           # Check if EC2 instances with the tag Name=cerberes-instance exist

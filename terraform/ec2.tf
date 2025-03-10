@@ -13,53 +13,10 @@ data "aws_security_group" "ec2_existing" {
   }
 }
 
-# Security group for EC2
-resource "aws_security_group" "ec2_sg" {
-  count       = var.existing_ec2_sg_id == "" ? 1 : 0
-  name        = "${var.app_name}-ec2-sg"
-  description = "Security group for EC2 instance"
-  vpc_id      = local.vpc_id
-
-  # SSH access
-  ingress {
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]  # Consider restricting to your IP for production
-  }
-
-  # HTTP access
-  ingress {
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  # Application port
-  ingress {
-    from_port   = 3000
-    to_port     = 3000
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  # Outbound traffic
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = {
-    Name = "${var.app_name}-ec2-sg"
-  }
-  
-  # Allow replacement of security group if it exists
-  lifecycle {
-    create_before_destroy = true
-  }
+# Look for existing EC2 security group
+data "aws_security_group" "ec2_sg" {
+  name   = "${var.app_name}-ec2-sg"
+  vpc_id = local.vpc_id
 }
 
 # Use existing EC2 instance if it exists
@@ -92,7 +49,7 @@ locals {
   
   # Use existing security group ID if provided via environment variable
   use_existing_sg = var.existing_ec2_sg_id != ""
-  sg_id = local.use_existing_sg ? var.existing_ec2_sg_id : aws_security_group.ec2_sg[0].id
+  sg_id = local.use_existing_sg ? var.existing_ec2_sg_id : data.aws_security_group.ec2_sg.id
 }
 
 # EC2 Instance for hosting the application
