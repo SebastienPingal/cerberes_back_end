@@ -181,8 +181,8 @@ jobs:
         run: |
           # Get the IP address using a simpler approach
           IP_ADDRESS=$(terraform output -raw public_ip | tr -d '\n')
-          # Set the output directly as a step output
-          echo "::set-output name=ip::$IP_ADDRESS"
+          # Set the output using the newer approach
+          echo "ip=$IP_ADDRESS" >> $GITHUB_OUTPUT
           echo "🖥️ EC2 instance public IP: $IP_ADDRESS"
 
       # Get RDS endpoint for database connection
@@ -193,8 +193,8 @@ jobs:
         run: |
           # Get the RDS endpoint using a simpler approach
           DB_ENDPOINT=$(terraform output -raw db_endpoint | tr -d '\n')
-          # Set the output directly as a step output
-          echo "::set-output name=endpoint::$DB_ENDPOINT"
+          # Set the output using the newer approach
+          echo "endpoint=$DB_ENDPOINT" >> $GITHUB_OUTPUT
           echo "🗄️ RDS endpoint: $DB_ENDPOINT"
 
       # Add a delay to ensure EC2 instance is fully initialized
