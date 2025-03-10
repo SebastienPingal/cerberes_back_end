@@ -64,16 +64,10 @@ locals {
   create_db_instance = length(data.aws_db_instance.existing) == 0
   
   # Get the subnet group name safely
-  subnet_group_name = length(data.aws_db_subnet_group.existing) > 0 ? 
-                      data.aws_db_subnet_group.existing[0].name : 
-                      length(aws_db_subnet_group.db_subnet_group) > 0 ? 
-                      aws_db_subnet_group.db_subnet_group[0].name : ""
+  subnet_group_name = length(data.aws_db_subnet_group.existing) > 0 ? data.aws_db_subnet_group.existing[0].name : (length(aws_db_subnet_group.db_subnet_group) > 0 ? aws_db_subnet_group.db_subnet_group[0].name : "")
                       
   # Get the DB endpoint safely
-  db_endpoint = length(data.aws_db_instance.existing) > 0 ? 
-                data.aws_db_instance.existing[0].endpoint : 
-                length(aws_db_instance.postgres) > 0 ? 
-                aws_db_instance.postgres[0].endpoint : "no-endpoint-available"
+  db_endpoint = length(data.aws_db_instance.existing) > 0 ? data.aws_db_instance.existing[0].endpoint : (length(aws_db_instance.postgres) > 0 ? aws_db_instance.postgres[0].endpoint : "no-endpoint-available")
 }
 
 # RDS PostgreSQL instance - only created if it doesn't already exist
