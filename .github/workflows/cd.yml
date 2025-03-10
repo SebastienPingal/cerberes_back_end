@@ -128,6 +128,26 @@ jobs:
           
           # Use a single security group for both EC2 and RDS
           CERBERES_SG_ID=$(aws ec2 describe-security-groups --filters "Name=group-name,Values=cerberes-sg" "Name=vpc-id,Values=$DEFAULT_VPC_ID" --query "SecurityGroups[0].GroupId" --output text)
+          
+          # Also check for the EC2-specific security group that might be in use
+          EC2_SG_ID=$(aws ec2 describe-security-groups --filters "Name=group-name,Values=cerberes-ec2-sg" "Name=vpc-id,Values=$DEFAULT_VPC_ID" --query "SecurityGroups[0].GroupId" --output text)
+          
+          # Check for RDS security group
+          DB_SG_ID=$(aws ec2 describe-security-groups --filters "Name=group-name,Values=cerberes-db-sg" "Name=vpc-id,Values=$DEFAULT_VPC_ID" --query "SecurityGroups[0].GroupId" --output text)
+          
+          # Store all security group IDs
+          if [ "$EC2_SG_ID" != "None" ]; then
+            echo "EC2_SG_EXISTS=true" >> $GITHUB_ENV
+            echo "EC2_SG_ID=$EC2_SG_ID" >> $GITHUB_ENV
+            echo "✅ EC2 Security Group exists: $EC2_SG_ID"
+          fi
+          
+          if [ "$DB_SG_ID" != "None" ]; then
+            echo "DB_SG_EXISTS=true" >> $GITHUB_ENV
+            echo "DB_SG_ID=$DB_SG_ID" >> $GITHUB_ENV
+            echo "✅ DB Security Group exists: $DB_SG_ID"
+          fi
+          
           if [ "$CERBERES_SG_ID" != "None" ]; then
             echo "SG_EXISTS=true" >> $GITHUB_ENV
             echo "CERBERES_SG_ID=$CERBERES_SG_ID" >> $GITHUB_ENV
@@ -195,62 +215,109 @@ jobs:
             sed -i "s/security_group_id = \"\"/security_group_id = \"$CERBERES_SG_ID\"/g" terraform/terraform.tfvars
           fi
           
-          # Check if the security group has the required rules
-          echo "🔍 Checking security group rules..."
-          
-          # Check for SSH rule
-          SSH_RULE=$(aws ec2 describe-security-groups --group-id $CERBERES_SG_ID --query "SecurityGroups[0].IpPermissions[?FromPort==\`22\` && ToPort==\`22\`].IpRanges[?CidrIp==\`0.0.0.0/0\`].CidrIp" --output text)
-          if [ -z "$SSH_RULE" ]; then
-            echo "🔧 Adding SSH access rule..."
+          # Add cross-security group rules if both EC2 and DB security groups exist
+          if [ "$EC2_SG_ID" != "None" ] && [ "$DB_SG_ID" != "None" ]; then
+            echo "🔧 Adding cross-security group rules..."
+            
+            # Allow EC2 to connect to RDS
+            echo "🔧 Adding rule to allow EC2 security group to access RDS security group..."
             aws ec2 authorize-security-group-ingress \
-              --group-id $CERBERES_SG_ID \
+              --group-id $DB_SG_ID \
               --protocol tcp \
-              --port 22 \
-              --cidr 0.0.0.0/0 || echo "⚠️ SSH rule already exists or couldn't be added"
-          else
-            echo "✅ SSH rule already exists"
+              --port 5432 \
+              --source-group $EC2_SG_ID || echo "⚠️ EC2 to RDS rule already exists or couldn't be added"
+              
+            echo "✅ Added cross-security group rules"
           fi
           
-          # Check for HTTP rule
-          HTTP_RULE=$(aws ec2 describe-security-groups --group-id $CERBERES_SG_ID --query "SecurityGroups[0].IpPermissions[?FromPort==\`80\` && ToPort==\`80\`].IpRanges[?CidrIp==\`0.0.0.0/0\`].CidrIp" --output text)
-          if [ -z "$HTTP_RULE" ]; then
-            echo "🔧 Adding HTTP access rule..."
-            aws ec2 authorize-security-group-ingress \
-              --group-id $CERBERES_SG_ID \
-              --protocol tcp \
-              --port 80 \
-              --cidr 0.0.0.0/0 || echo "⚠️ HTTP rule already exists or couldn't be added"
-          else
-            echo "✅ HTTP rule already exists"
-          fi
-          
-          # Check for application port rule
-          APP_RULE=$(aws ec2 describe-security-groups --group-id $CERBERES_SG_ID --query "SecurityGroups[0].IpPermissions[?FromPort==\`3000\` && ToPort==\`3000\`].IpRanges[?CidrIp==\`0.0.0.0/0\`].CidrIp" --output text)
-          if [ -z "$APP_RULE" ]; then
-            echo "🔧 Adding application port access rule..."
-            aws ec2 authorize-security-group-ingress \
-              --group-id $CERBERES_SG_ID \
-              --protocol tcp \
-              --port 3000 \
-              --cidr 0.0.0.0/0 || echo "⚠️ Application port rule already exists or couldn't be added"
-          else
-            echo "✅ Application port rule already exists"
-          fi
-          
-          # Check for PostgreSQL rule
-          PG_RULE=$(aws ec2 describe-security-groups --group-id $CERBERES_SG_ID --query "SecurityGroups[0].IpPermissions[?FromPort==\`5432\` && ToPort==\`5432\`].UserIdGroupPairs[?GroupId==\`$CERBERES_SG_ID\`].GroupId" --output text)
-          if [ -z "$PG_RULE" ]; then
-            echo "🔧 Adding PostgreSQL access rule..."
+          # If we have both the unified security group and the EC2 security group, add rules between them
+          if [ "$CERBERES_SG_ID" != "None" ] && [ "$EC2_SG_ID" != "None" ]; then
+            echo "🔧 Adding rules between unified and EC2 security groups..."
+            
+            # Allow EC2 security group to access the unified security group's PostgreSQL
+            echo "🔧 Adding rule to allow EC2 security group to access unified security group's PostgreSQL..."
             aws ec2 authorize-security-group-ingress \
               --group-id $CERBERES_SG_ID \
               --protocol tcp \
               --port 5432 \
-              --source-group $CERBERES_SG_ID || echo "⚠️ PostgreSQL rule already exists or couldn't be added"
-          else
-            echo "✅ PostgreSQL rule already exists"
+              --source-group $EC2_SG_ID || echo "⚠️ EC2 to unified rule already exists or couldn't be added"
+              
+            echo "✅ Added rules between unified and EC2 security groups"
           fi
           
-          echo "✅ Security group rules verified"
+          # If we have both the unified security group and the DB security group, add rules between them
+          if [ "$CERBERES_SG_ID" != "None" ] && [ "$DB_SG_ID" != "None" ]; then
+            echo "🔧 Adding rules between unified and DB security groups..."
+            
+            # Allow unified security group to access the DB security group's PostgreSQL
+            echo "🔧 Adding rule to allow unified security group to access DB security group's PostgreSQL..."
+            aws ec2 authorize-security-group-ingress \
+              --group-id $DB_SG_ID \
+              --protocol tcp \
+              --port 5432 \
+              --source-group $CERBERES_SG_ID || echo "⚠️ Unified to DB rule already exists or couldn't be added"
+              
+            echo "✅ Added rules between unified and DB security groups"
+          fi
+          
+          # Check if the security group has the required rules
+          if [ "$CERBERES_SG_ID" != "None" ]; then
+            echo "🔍 Checking security group rules..."
+            
+            # Check for SSH rule
+            SSH_RULE=$(aws ec2 describe-security-groups --group-id $CERBERES_SG_ID --query "SecurityGroups[0].IpPermissions[?FromPort==\`22\` && ToPort==\`22\`].IpRanges[?CidrIp==\`0.0.0.0/0\`].CidrIp" --output text)
+            if [ -z "$SSH_RULE" ]; then
+              echo "🔧 Adding SSH access rule..."
+              aws ec2 authorize-security-group-ingress \
+                --group-id $CERBERES_SG_ID \
+                --protocol tcp \
+                --port 22 \
+                --cidr 0.0.0.0/0 || echo "⚠️ SSH rule already exists or couldn't be added"
+            else
+              echo "✅ SSH rule already exists"
+            fi
+            
+            # Check for HTTP rule
+            HTTP_RULE=$(aws ec2 describe-security-groups --group-id $CERBERES_SG_ID --query "SecurityGroups[0].IpPermissions[?FromPort==\`80\` && ToPort==\`80\`].IpRanges[?CidrIp==\`0.0.0.0/0\`].CidrIp" --output text)
+            if [ -z "$HTTP_RULE" ]; then
+              echo "🔧 Adding HTTP access rule..."
+              aws ec2 authorize-security-group-ingress \
+                --group-id $CERBERES_SG_ID \
+                --protocol tcp \
+                --port 80 \
+                --cidr 0.0.0.0/0 || echo "⚠️ HTTP rule already exists or couldn't be added"
+            else
+              echo "✅ HTTP rule already exists"
+            fi
+            
+            # Check for application port rule
+            APP_RULE=$(aws ec2 describe-security-groups --group-id $CERBERES_SG_ID --query "SecurityGroups[0].IpPermissions[?FromPort==\`3000\` && ToPort==\`3000\`].IpRanges[?CidrIp==\`0.0.0.0/0\`].CidrIp" --output text)
+            if [ -z "$APP_RULE" ]; then
+              echo "🔧 Adding application port access rule..."
+              aws ec2 authorize-security-group-ingress \
+                --group-id $CERBERES_SG_ID \
+                --protocol tcp \
+                --port 3000 \
+                --cidr 0.0.0.0/0 || echo "⚠️ Application port rule already exists or couldn't be added"
+            else
+              echo "✅ Application port rule already exists"
+            fi
+            
+            # Check for PostgreSQL rule
+            PG_RULE=$(aws ec2 describe-security-groups --group-id $CERBERES_SG_ID --query "SecurityGroups[0].IpPermissions[?FromPort==\`5432\` && ToPort==\`5432\`].UserIdGroupPairs[?GroupId==\`$CERBERES_SG_ID\`].GroupId" --output text)
+            if [ -z "$PG_RULE" ]; then
+              echo "🔧 Adding PostgreSQL access rule..."
+              aws ec2 authorize-security-group-ingress \
+                --group-id $CERBERES_SG_ID \
+                --protocol tcp \
+                --port 5432 \
+                --source-group $CERBERES_SG_ID || echo "⚠️ PostgreSQL rule already exists or couldn't be added"
+            else
+              echo "✅ PostgreSQL rule already exists"
+            fi
+            
+            echo "✅ Security group rules verified"
+          fi
           
           # Check if EC2 instances with the tag Name=cerberes-instance exist
           EC2_COUNT=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=cerberes-instance" "Name=instance-state-name,Values=running,stopped" --query "length(Reservations[*].Instances[*])" --output text)
@@ -424,11 +491,6 @@ jobs:
             if [[ "$NODE_VERSION" != "v18"* ]]; then
               echo "📦 Installing Node.js 18 LTS..."
               sudo apt update
-              # Remove conflicting packages first
-              sudo apt remove -y libnode-dev nodejs
-              # Clean up any broken dependencies
-              sudo apt autoremove -y
-              # Install Node.js 18
               curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
               sudo apt install -y nodejs
               echo "✅ Node.js $(node -v) installed"
@@ -446,10 +508,6 @@ jobs:
               sudo apt-get update
               sudo apt-get install -y postgresql-client
             fi
-            
-            # Install network diagnostic tools
-            echo "📦 Installing network diagnostic tools..."
-            sudo apt-get install -y dnsutils traceroute net-tools
             
             # Test database connection
             echo "🔍 Testing database connection..."
@@ -472,89 +530,76 @@ jobs:
             echo "🔍 EC2 Private IP: $PRIVATE_IP"
             echo "🔍 EC2 Security Groups: $SECURITY_GROUPS"
             
+            # Install AWS CLI if not available
+            if ! command -v aws &> /dev/null; then
+              echo "📦 Installing AWS CLI..."
+              curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+              sudo apt-get install -y unzip
+              unzip awscliv2.zip
+              sudo ./aws/install
+              rm -rf aws awscliv2.zip
+            fi
+            
+            # Configure AWS CLI with instance profile credentials
+            echo "🔧 Configuring AWS CLI with instance profile credentials..."
+            TOKEN=$(curl -s -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600")
+            REGION=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/placement/region)
+            echo "🔍 Region: $REGION"
+            
+            # Get the security group IDs
+            echo "🔧 Getting security group IDs..."
+            MAC=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/mac)
+            VPC_ID=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/network/interfaces/macs/$MAC/vpc-id)
+            echo "🔍 VPC ID: $VPC_ID"
+            
+            # Get EC2 security group ID
+            EC2_SG_NAME=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/security-groups)
+            EC2_SG_ID=$(aws ec2 describe-security-groups --region $REGION --filters "Name=group-name,Values=$EC2_SG_NAME" "Name=vpc-id,Values=$VPC_ID" --query "SecurityGroups[0].GroupId" --output text)
+            echo "🔍 EC2 Security Group ID: $EC2_SG_ID"
+            
+            # Get RDS security group ID
+            DB_HOST_SHORT=$(echo $DB_HOST | cut -d'.' -f1)
+            DB_SG_NAME="${DB_HOST_SHORT}-sg"
+            echo "🔍 Looking for RDS security group with name pattern: *${DB_HOST_SHORT}*"
+            
+            # Try to find the RDS security group
+            DB_SG_ID=$(aws ec2 describe-security-groups --region $REGION --filters "Name=group-name,Values=*${DB_HOST_SHORT}*,*rds*,*db*" "Name=vpc-id,Values=$VPC_ID" --query "SecurityGroups[0].GroupId" --output text)
+            if [ "$DB_SG_ID" == "None" ]; then
+              echo "⚠️ Could not find RDS security group by name pattern"
+              # Try to find by looking at the DB instance
+              DB_IDENTIFIER=$(echo $DB_HOST_SHORT | sed 's/-db$//')
+              echo "🔍 Looking for RDS instance with identifier: $DB_IDENTIFIER"
+              DB_SG_ID=$(aws rds describe-db-instances --region $REGION --db-instance-identifier $DB_IDENTIFIER --query "DBInstances[0].VpcSecurityGroups[0].VpcSecurityGroupId" --output text 2>/dev/null || echo "None")
+            fi
+            
+            echo "🔍 RDS Security Group ID: $DB_SG_ID"
+            
+            # Add rule to allow EC2 to connect to RDS if both security groups were found
+            if [ "$EC2_SG_ID" != "None" ] && [ "$DB_SG_ID" != "None" ] && [ "$DB_SG_ID" != "" ]; then
+              echo "🔧 Adding rule to allow EC2 security group to access RDS security group..."
+              aws ec2 authorize-security-group-ingress --region $REGION \
+                --group-id $DB_SG_ID \
+                --protocol tcp \
+                --port 5432 \
+                --source-group $EC2_SG_ID || echo "⚠️ Rule already exists or couldn't be added"
+              
+              echo "✅ Added rule to allow EC2 to connect to RDS"
+            else
+              echo "⚠️ Could not add security group rule - missing security group IDs"
+            fi
+            
             # Test connection with timeout
             if PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -c "SELECT 1" -t -A -w -q; then
               echo "✅ Database connection successful!"
             else
               echo "❌ Database connection failed!"
               echo "⚠️ Checking network connectivity to database..."
-              
-              # Try to resolve the hostname
-              echo "🔍 Resolving database hostname..."
-              host $DB_HOST || echo "❌ Cannot resolve hostname"
-              
-              # Check if we can reach the database port
-              echo "🔍 Testing connection to database port..."
               nc -zv "$DB_HOST" 5432 || echo "❌ Cannot connect to database port"
-              
-              # Get the RDS instance's private IP
-              echo "🔍 Getting RDS private IP..."
-              DB_IP=$(host $DB_HOST | grep "has address" | awk '{print $4}')
-              echo "🔍 RDS IP address: $DB_IP"
-              
-              # Check route to the database
-              echo "🔍 Checking route to database..."
-              traceroute -n $DB_HOST || echo "❌ Traceroute failed"
-              
-              # Check security group configuration
               echo "⚠️ Checking security group rules..."
-              echo "🔍 EC2 Security Groups: $SECURITY_GROUPS"
-              echo "🔍 EC2 Private IP: $PRIVATE_IP"
-              
-              # Try connecting with verbose output
-              echo "🔍 Trying connection with verbose output..."
-              PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -v -c "SELECT 1" || echo "❌ Verbose connection failed"
-              
-              echo "⚠️ Please check that the security group allows traffic from $PRIVATE_IP to the RDS instance on port 5432"
-              
-              # Try to install AWS CLI if not available
-              if ! command -v aws &> /dev/null; then
-                echo "📦 Installing AWS CLI..."
-                curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-                sudo apt-get install -y unzip
-                unzip awscliv2.zip
-                sudo ./aws/install
-                rm -rf aws awscliv2.zip
-              fi
-              
-              # If AWS CLI is available and credentials are set up, try to get security group info
-              if command -v aws &> /dev/null; then
-                echo "🔍 Checking if AWS CLI credentials are available..."
-                if aws sts get-caller-identity &> /dev/null; then
-                  echo "✅ AWS CLI credentials are available"
-                  
-                  # Get security group ID from metadata
-                  SG_NAME=$(curl -s http://169.254.169.254/latest/meta-data/security-groups)
-                  echo "🔍 Looking up security group ID for $SG_NAME..."
-                  
-                  # Get VPC ID
-                  MAC=$(curl -s http://169.254.169.254/latest/meta-data/mac)
-                  VPC_ID=$(curl -s http://169.254.169.254/latest/meta-data/network/interfaces/macs/$MAC/vpc-id)
-                  echo "🔍 VPC ID: $VPC_ID"
-                  
-                  # Get security group ID
-                  SG_ID=$(aws ec2 describe-security-groups --filters "Name=group-name,Values=$SG_NAME" "Name=vpc-id,Values=$VPC_ID" --query "SecurityGroups[0].GroupId" --output text)
-                  echo "🔍 Security Group ID: $SG_ID"
-                  
-                  # Check if the security group has the PostgreSQL rule
-                  echo "🔍 Checking PostgreSQL rule in security group..."
-                  PG_RULE=$(aws ec2 describe-security-groups --group-id $SG_ID --query "SecurityGroups[0].IpPermissions[?FromPort==\`5432\` && ToPort==\`5432\`].UserIdGroupPairs[?GroupId==\`$SG_ID\`].GroupId" --output text)
-                  
-                  if [ -z "$PG_RULE" ]; then
-                    echo "⚠️ PostgreSQL rule not found in security group"
-                    echo "🔧 Adding PostgreSQL rule to security group..."
-                    aws ec2 authorize-security-group-ingress \
-                      --group-id $SG_ID \
-                      --protocol tcp \
-                      --port 5432 \
-                      --source-group $SG_ID && echo "✅ PostgreSQL rule added successfully" || echo "❌ Failed to add PostgreSQL rule"
-                  else
-                    echo "✅ PostgreSQL rule found in security group"
-                  fi
-                else
-                  echo "⚠️ AWS CLI credentials not available"
-                fi
-              fi
+              curl -s http://169.254.169.254/latest/meta-data/security-groups
+              echo ""
+              curl -s http://169.254.169.254/latest/meta-data/local-ipv4
+              echo ""
             fi
             
             # Stop the application if it's running
