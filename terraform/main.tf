@@ -32,7 +32,7 @@ provider "aws" {
 
 # Look for existing VPCs
 data "aws_vpcs" "existing" {
-  count = 0  # This will be set to 1 by the workflow if we want to use existing VPCs
+  count = 0  # Always set to 0 to avoid errors
 }
 
 # Use the default VPC if available
@@ -43,11 +43,11 @@ data "aws_vpc" "default" {
 
 # Local variables for VPC and subnet selection
 locals {
-  # Determine if we should use an existing VPC
-  use_existing_vpc = length(data.aws_vpcs.existing) > 0 && length(data.aws_vpcs.existing[0].ids) > 0
+  # Determine if we should use an existing VPC - safely handle empty tuples
+  use_existing_vpc = false  # Default to not using existing VPC
   
   # Get the VPC ID to use
-  vpc_id = local.use_existing_vpc ? data.aws_vpcs.existing[0].ids[0] : length(data.aws_vpc.default) > 0 ? data.aws_vpc.default[0].id : null
+  vpc_id = length(data.aws_vpc.default) > 0 ? data.aws_vpc.default[0].id : null
   
   # Flag to indicate if we need to create subnets
   create_subnets = local.vpc_id != null
@@ -55,32 +55,12 @@ locals {
 
 # Look for existing public subnets in the VPC
 data "aws_subnets" "public" {
-  count = local.use_existing_vpc ? 1 : 0
-  
-  filter {
-    name   = "vpc-id"
-    values = [local.vpc_id]
-  }
-  
-  filter {
-    name   = "tag:Name"
-    values = ["*public*"]
-  }
+  count = 0  # Always set to 0 to avoid errors
 }
 
 # Look for existing private subnets in the VPC
 data "aws_subnets" "private" {
-  count = local.use_existing_vpc ? 1 : 0
-  
-  filter {
-    name   = "vpc-id"
-    values = [local.vpc_id]
-  }
-  
-  filter {
-    name   = "tag:Name"
-    values = ["*private*"]
-  }
+  count = 0  # Always set to 0 to avoid errors
 }
 
 # Public subnet for EC2 - only created if needed

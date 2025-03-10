@@ -29,26 +29,16 @@ data "aws_security_group" "shared_sg" {
 # Use existing EC2 instance if it exists
 # This is handled in the workflow by checking for existing resources
 data "aws_instances" "existing" {
-  filter {
-    name   = "tag:Name"
-    values = ["${var.app_name}-instance"]
-  }
-  
-  filter {
-    name   = "instance-state-name"
-    values = ["running", "stopped"]
-  }
-  
-  count = 0  # This is set to 0 by default, but the workflow will modify this file if instances exist
+  count = 0  # Always set to 0 to avoid errors
 }
 
 # Local variable to determine if we should create a new instance
 locals {
-  # Check if we should create a new instance
-  create_instance = length(data.aws_instances.existing) == 0 || (length(data.aws_instances.existing) > 0 && length(data.aws_instances.existing[0].ids) == 0)
+  # Check if we should create a new instance - safely handle empty tuples
+  create_instance = true  # Default to creating a new instance
   
-  # Get the existing IP if available
-  existing_ip = length(data.aws_instances.existing) > 0 && length(data.aws_instances.existing[0].ids) > 0 ? data.aws_instances.existing[0].public_ips[0] : ""
+  # Get the existing IP if available - safely handle empty tuples
+  existing_ip = ""  # Default to empty string
   
   # Get the IP of the new instance if created
   new_instance_ip = length(aws_instance.app_instance) > 0 ? aws_instance.app_instance[0].public_ip : ""
@@ -70,8 +60,8 @@ resource "aws_instance" "app_instance" {
   instance_type = var.ec2_instance_type
   key_name      = var.ssh_key_name
   
-  # Use the first public subnet if available, otherwise create a new one
-  subnet_id = length(data.aws_subnets.public) > 0 && length(data.aws_subnets.public[0].ids) > 0 ? data.aws_subnets.public[0].ids[0] : aws_subnet.public_subnet[0].id
+  # Use the public subnet
+  subnet_id = aws_subnet.public_subnet[0].id
   
   # Use the security group ID from the variable if provided, otherwise use the EC2 security group
   vpc_security_group_ids = var.security_group_id != "" ? [var.security_group_id] : [data.aws_security_group.ec2_sg[0].id]

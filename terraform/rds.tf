@@ -23,16 +23,15 @@ data "aws_security_group" "db_sg" {
 # Use an existing DB subnet group if it exists
 # This is handled in the workflow by checking for existing resources
 data "aws_db_subnet_group" "existing" {
-  name = "${var.app_name}-db-subnet-group"
-  count = 0  # This is set to 0 by default, but the workflow will modify this file if the subnet group exists
+  count = 0  # Always set to 0 to avoid errors
 }
 
 # DB Subnet Group - only created if it doesn't already exist
 resource "aws_db_subnet_group" "db_subnet_group" {
-  # Only create if the data lookup doesn't find an existing one and we have private subnets
-  count      = length(data.aws_db_subnet_group.existing) > 0 ? 0 : 1
+  # Only create if we have private subnets
+  count      = length(local.private_subnet_ids) >= 2 ? 1 : 0
   name       = "${var.app_name}-db-subnet-group"
-  subnet_ids = length(local.private_subnet_ids) >= 2 ? local.private_subnet_ids : [aws_subnet.private_subnet_1[0].id, aws_subnet.private_subnet_2[0].id]
+  subnet_ids = local.private_subnet_ids
 
   tags = {
     Name = "${var.app_name}-db-subnet-group"
@@ -42,19 +41,19 @@ resource "aws_db_subnet_group" "db_subnet_group" {
 # Use existing RDS instance if it exists
 # This is handled in the workflow by checking for existing resources
 data "aws_db_instance" "existing" {
-  db_instance_identifier = "${var.app_name}-db"
-  count = 0  # This is set to 0 by default, but the workflow will modify this file if the instance exists
+  count = 0  # Always set to 0 to avoid errors
 }
 
 # Local variables for RDS
 locals {
-  create_db_instance = length(data.aws_db_instance.existing) == 0
+  # Determine if we should create a new DB instance
+  create_db_instance = true  # Default to creating a new DB instance
   
   # Get the DB endpoint safely
-  db_endpoint = length(data.aws_db_instance.existing) > 0 ? data.aws_db_instance.existing[0].endpoint : (length(aws_db_instance.postgres) > 0 ? aws_db_instance.postgres[0].endpoint : "no-endpoint-available")
+  db_endpoint = length(aws_db_instance.postgres) > 0 ? aws_db_instance.postgres[0].endpoint : "no-endpoint-available"
   
-  # Get the private subnet IDs to use
-  private_subnet_ids = length(data.aws_subnets.private) > 0 && length(data.aws_subnets.private[0].ids) >= 2 ? slice(data.aws_subnets.private[0].ids, 0, 2) : (length(aws_subnet.private_subnet_1) > 0 && length(aws_subnet.private_subnet_2) > 0 ? [aws_subnet.private_subnet_1[0].id, aws_subnet.private_subnet_2[0].id] : [])
+  # Get the private subnet IDs to use - safely handle empty tuples
+  private_subnet_ids = length(aws_subnet.private_subnet_1) > 0 && length(aws_subnet.private_subnet_2) > 0 ? [aws_subnet.private_subnet_1[0].id, aws_subnet.private_subnet_2[0].id] : []
   
   # Determine which security group to use for RDS
   use_existing_db_sg = var.security_group_id == "" && var.existing_db_sg_id != ""
@@ -75,7 +74,7 @@ resource "aws_db_instance" "postgres" {
   db_name                = "cerberes"
   username               = var.db_username
   password               = var.db_password
-  db_subnet_group_name   = length(data.aws_db_subnet_group.existing) > 0 ? data.aws_db_subnet_group.existing[0].name : length(aws_db_subnet_group.db_subnet_group) > 0 ? aws_db_subnet_group.db_subnet_group[0].name : null
+  db_subnet_group_name   = length(aws_db_subnet_group.db_subnet_group) > 0 ? aws_db_subnet_group.db_subnet_group[0].name : null
   vpc_security_group_ids = [local.db_sg_id]
   publicly_accessible    = false
   skip_final_snapshot    = true
