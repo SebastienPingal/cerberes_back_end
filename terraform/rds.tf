@@ -1,19 +1,13 @@
 # DB Subnet Group for RDS
 resource "aws_db_subnet_group" "db_subnet_group" {
-  # Only create if we have at least 2 subnets and no existing subnet group
-  count      = length(local.private_subnet_ids) >= 2 && !local.db_subnet_group_exists ? 1 : 0
+  # Only create if we have at least 2 subnets
+  count      = length(local.private_subnet_ids) >= 2 ? 1 : 0
   name       = "${var.app_name}-db-subnet-group"
   subnet_ids = local.private_subnet_ids
 
   tags = {
     Name = "${var.app_name}-db-subnet-group"
   }
-}
-
-# Check for existing DB subnet group
-data "aws_db_subnet_group" "existing" {
-  count = 0
-  name  = "${var.app_name}-db-subnet-group"
 }
 
 # Check for existing RDS instance
@@ -26,11 +20,8 @@ data "aws_db_instances" "existing" {
 
 # Local variables for RDS
 locals {
-  # Check if DB subnet group exists
-  db_subnet_group_exists = length(data.aws_db_subnet_groups.existing.names) > 0
-  
   # Get the subnet group name to use
-  db_subnet_group_name = local.db_subnet_group_exists ? "${var.app_name}-db-subnet-group" : (length(aws_db_subnet_group.db_subnet_group) > 0 ? aws_db_subnet_group.db_subnet_group[0].name : null)
+  db_subnet_group_name = length(aws_db_subnet_group.db_subnet_group) > 0 ? aws_db_subnet_group.db_subnet_group[0].name : null
   
   # Check if DB instance exists
   db_instance_exists = length(data.aws_db_instances.existing.instance_identifiers) > 0
@@ -48,7 +39,7 @@ resource "aws_db_instance" "postgres" {
   username             = var.db_username
   password             = var.db_password
   db_name              = var.app_name
-  vpc_security_group_ids = [var.security_group_id != "" ? var.security_group_id : (length(aws_security_group.app_sg) > 0 ? aws_security_group.app_sg[0].id : null)]
+  vpc_security_group_ids = [local.security_group_id]
   db_subnet_group_name = local.db_subnet_group_name
   skip_final_snapshot  = true
   publicly_accessible  = false
