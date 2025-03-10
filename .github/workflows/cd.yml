@@ -250,8 +250,12 @@ jobs:
           PORT=3000
           EOF
           
+          # Copy the node_modules directory to ensure all dependencies are included
+          echo "📦 Preparing dependencies for deployment..."
+          pnpm install --prod
+          
           # Use scp directly instead of the action
-          scp -o StrictHostKeyChecking=no -i ~/.ssh/ec2_key -r dist/ package.json pnpm-lock.yaml .env ubuntu@${{ env.EC2_IP }}:/home/ubuntu/app/
+          scp -o StrictHostKeyChecking=no -i ~/.ssh/ec2_key -r dist/ node_modules/ package.json pnpm-lock.yaml .env ubuntu@${{ env.EC2_IP }}:/home/ubuntu/app/
           echo "📦 Files deployed to EC2"
 
       - name: Configure and start application
@@ -274,26 +278,49 @@ jobs:
               sudo npm install -g pm2 pnpm
             fi
             
-            # Install dependencies and start with PM2
-            echo "📦 Installing dependencies..."
-            pnpm install --prod
+            # We're now skipping the pnpm install since we're copying node_modules directly
+            echo "📦 Using pre-installed dependencies..."
+            
+            # Test the application directly first to check for errors
+            echo "🔍 Testing application startup..."
+            node -e "try { require('./dist/src/server'); console.log('✅ Module loads successfully'); } catch(e) { console.error('❌ Error loading module:', e); process.exit(1); }"
             
             # Stop the application if it's running
             echo "🔄 Restarting application..."
             pm2 stop cerberes || echo "🤖 App not running"
             
-            # Start the application
-            pm2 start dist/src/server.js --name cerberes
+            # Start the application with more detailed logging
+            echo "🚀 Starting application..."
+            pm2 start dist/src/server.js --name cerberes --log-date-format 'YYYY-MM-DD HH:mm:ss.SSS' --merge-logs
             pm2 save
+            
+            # Check if the application started successfully
+            sleep 5
+            if pm2 show cerberes | grep -q "status.*online"; then
+              echo "✅ Application started successfully!"
+            else
+              echo "❌ Application failed to start. Checking logs..."
+              pm2 logs cerberes --lines 50
+              exit 1
+            fi
             
             # Configure PM2 to start on boot
             echo "🔄 Setting up PM2 to start on boot..."
             pm2 startup | grep "sudo" | bash || echo "⚠️ PM2 startup command failed, but continuing..."
             pm2 save
             
-            # Verify the application is running
+            # Verify the application is running and listening on port 3000
             echo "🔍 Verifying application status..."
             pm2 list
+            
+            # Check if the application is listening on port 3000
+            if netstat -tulpn 2>/dev/null | grep -q ":3000"; then
+              echo "✅ Application is listening on port 3000"
+            else
+              echo "⚠️ Application may not be listening on port 3000"
+              sudo apt-get install -y net-tools
+              netstat -tulpn | grep node
+            fi
             
             echo "🚀 Deployment completed"
           EOF
