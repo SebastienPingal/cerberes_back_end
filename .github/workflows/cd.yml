@@ -479,6 +479,31 @@ jobs:
       - name: Configure and start application
         if: steps.terraform-apply.outcome == 'success'
         run: |
+          # Get EC2 and RDS security group information
+          echo "🔧 Getting security group information..."
+          EC2_SG_ID=$(aws ec2 describe-security-groups --filters "Name=group-name,Values=cerberes-ec2-sg" --query "SecurityGroups[0].GroupId" --output text)
+          
+          # Get RDS security group ID
+          DB_IDENTIFIER="cerberes-db"
+          DB_SG_ID=$(aws rds describe-db-instances --db-instance-identifier $DB_IDENTIFIER --query "DBInstances[0].VpcSecurityGroups[0].VpcSecurityGroupId" --output text)
+          
+          echo "🔍 EC2 Security Group ID: $EC2_SG_ID"
+          echo "🔍 RDS Security Group ID: $DB_SG_ID"
+          
+          # Add rule to allow EC2 to connect to RDS
+          if [ "$EC2_SG_ID" != "None" ] && [ "$DB_SG_ID" != "None" ] && [ -n "$EC2_SG_ID" ] && [ -n "$DB_SG_ID" ]; then
+            echo "🔧 Adding rule to allow EC2 security group to access RDS security group..."
+            aws ec2 authorize-security-group-ingress \
+              --group-id $DB_SG_ID \
+              --protocol tcp \
+              --port 5432 \
+              --source-group $EC2_SG_ID || echo "⚠️ Rule already exists or couldn't be added"
+            
+            echo "✅ Added rule to allow EC2 to connect to RDS"
+          else
+            echo "⚠️ Could not add security group rule - missing security group IDs"
+          fi
+          
           # Use ssh directly instead of the action
           ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=60 -i ~/.ssh/ec2_key ubuntu@${{ env.EC2_IP }} << 'EOF'
             cd /home/ubuntu/app
