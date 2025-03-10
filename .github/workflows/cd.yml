@@ -150,13 +150,18 @@ jobs:
               --vpc-id $DEFAULT_VPC_ID \
               --query "GroupId" --output text)
             
+            if [ -z "$CERBERES_SG_ID" ] || [ "$CERBERES_SG_ID" == "None" ]; then
+              echo "❌ Failed to create security group"
+              exit 1
+            fi
+            
             # Add SSH access
             echo "🔧 Adding SSH access rule..."
             aws ec2 authorize-security-group-ingress \
               --group-id $CERBERES_SG_ID \
               --protocol tcp \
               --port 22 \
-              --cidr 0.0.0.0/0
+              --cidr 0.0.0.0/0 || echo "⚠️ SSH rule couldn't be added"
               
             # Add HTTP access
             echo "🔧 Adding HTTP access rule..."
@@ -164,7 +169,7 @@ jobs:
               --group-id $CERBERES_SG_ID \
               --protocol tcp \
               --port 80 \
-              --cidr 0.0.0.0/0
+              --cidr 0.0.0.0/0 || echo "⚠️ HTTP rule couldn't be added"
               
             # Add application port access
             echo "🔧 Adding application port access rule..."
@@ -172,7 +177,7 @@ jobs:
               --group-id $CERBERES_SG_ID \
               --protocol tcp \
               --port 3000 \
-              --cidr 0.0.0.0/0
+              --cidr 0.0.0.0/0 || echo "⚠️ Application port rule couldn't be added"
               
             # Add PostgreSQL access within the security group
             echo "🔧 Adding PostgreSQL access rule..."
@@ -180,8 +185,8 @@ jobs:
               --group-id $CERBERES_SG_ID \
               --protocol tcp \
               --port 5432 \
-              --source-group $CERBERES_SG_ID
-              
+              --source-group $CERBERES_SG_ID || echo "⚠️ PostgreSQL rule couldn't be added"
+            
             echo "CERBERES_SG_ID=$CERBERES_SG_ID" >> $GITHUB_ENV
             echo "TF_VAR_security_group_id=$CERBERES_SG_ID" >> $GITHUB_ENV
             echo "✅ Created Cerberes security group: $CERBERES_SG_ID"
@@ -201,7 +206,9 @@ jobs:
               --group-id $CERBERES_SG_ID \
               --protocol tcp \
               --port 22 \
-              --cidr 0.0.0.0/0
+              --cidr 0.0.0.0/0 || echo "⚠️ SSH rule already exists or couldn't be added"
+          else
+            echo "✅ SSH rule already exists"
           fi
           
           # Check for HTTP rule
@@ -212,7 +219,9 @@ jobs:
               --group-id $CERBERES_SG_ID \
               --protocol tcp \
               --port 80 \
-              --cidr 0.0.0.0/0
+              --cidr 0.0.0.0/0 || echo "⚠️ HTTP rule already exists or couldn't be added"
+          else
+            echo "✅ HTTP rule already exists"
           fi
           
           # Check for application port rule
@@ -223,7 +232,9 @@ jobs:
               --group-id $CERBERES_SG_ID \
               --protocol tcp \
               --port 3000 \
-              --cidr 0.0.0.0/0
+              --cidr 0.0.0.0/0 || echo "⚠️ Application port rule already exists or couldn't be added"
+          else
+            echo "✅ Application port rule already exists"
           fi
           
           # Check for PostgreSQL rule
@@ -234,7 +245,9 @@ jobs:
               --group-id $CERBERES_SG_ID \
               --protocol tcp \
               --port 5432 \
-              --source-group $CERBERES_SG_ID
+              --source-group $CERBERES_SG_ID || echo "⚠️ PostgreSQL rule already exists or couldn't be added"
+          else
+            echo "✅ PostgreSQL rule already exists"
           fi
           
           echo "✅ Security group rules verified"
