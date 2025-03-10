@@ -101,6 +101,7 @@ jobs:
           ssh_key_name    = "${{ secrets.SSH_KEY_NAME }}"
           ec2_instance_type = "t2.micro"
           db_instance_class = "db.t3.micro"
+          security_group_id = ""  # Will be populated by the next step if it exists
           EOF
           
           echo "🔑 Created terraform.tfvars with database credentials"
@@ -125,87 +126,118 @@ jobs:
             echo "🆕 No VPCs exist - will use default VPC"
           fi
           
-          # Get EC2 security group ID
-          EC2_SG_ID=$(aws ec2 describe-security-groups --filters "Name=group-name,Values=cerberes-ec2-sg" "Name=vpc-id,Values=$DEFAULT_VPC_ID" --query "SecurityGroups[0].GroupId" --output text)
-          if [ "$EC2_SG_ID" != "None" ]; then
-            echo "EC2_SG_EXISTS=true" >> $GITHUB_ENV
-            echo "EC2_SG_ID=$EC2_SG_ID" >> $GITHUB_ENV
-            echo "✅ EC2 Security Group exists - will use existing one: $EC2_SG_ID"
-          else
-            echo "EC2_SG_EXISTS=false" >> $GITHUB_ENV
-            echo "🆕 EC2 Security Group does not exist - will create new one"
+          # Use a single security group for both EC2 and RDS
+          CERBERES_SG_ID=$(aws ec2 describe-security-groups --filters "Name=group-name,Values=cerberes-sg" "Name=vpc-id,Values=$DEFAULT_VPC_ID" --query "SecurityGroups[0].GroupId" --output text)
+          if [ "$CERBERES_SG_ID" != "None" ]; then
+            echo "SG_EXISTS=true" >> $GITHUB_ENV
+            echo "CERBERES_SG_ID=$CERBERES_SG_ID" >> $GITHUB_ENV
+            echo "✅ Cerberes Security Group exists - will use existing one: $CERBERES_SG_ID"
             
-            # Create EC2 security group
-            echo "🔧 Creating EC2 security group..."
-            EC2_SG_ID=$(aws ec2 create-security-group \
-              --group-name cerberes-ec2-sg \
-              --description "Security group for EC2 instance" \
+            # Store the security group ID for Terraform
+            echo "TF_VAR_security_group_id=$CERBERES_SG_ID" >> $GITHUB_ENV
+            
+            # Update the terraform.tfvars file with the security group ID
+            sed -i "s/security_group_id = \"\"/security_group_id = \"$CERBERES_SG_ID\"/g" terraform/terraform.tfvars
+          else
+            echo "SG_EXISTS=false" >> $GITHUB_ENV
+            echo "🆕 Cerberes Security Group does not exist - will create new one"
+            
+            # Create a single security group for both EC2 and RDS
+            echo "🔧 Creating Cerberes security group..."
+            CERBERES_SG_ID=$(aws ec2 create-security-group \
+              --group-name cerberes-sg \
+              --description "Security group for Cerberes application" \
               --vpc-id $DEFAULT_VPC_ID \
               --query "GroupId" --output text)
             
             # Add SSH access
+            echo "🔧 Adding SSH access rule..."
             aws ec2 authorize-security-group-ingress \
-              --group-id $EC2_SG_ID \
+              --group-id $CERBERES_SG_ID \
               --protocol tcp \
               --port 22 \
               --cidr 0.0.0.0/0
               
             # Add HTTP access
+            echo "🔧 Adding HTTP access rule..."
             aws ec2 authorize-security-group-ingress \
-              --group-id $EC2_SG_ID \
+              --group-id $CERBERES_SG_ID \
               --protocol tcp \
               --port 80 \
               --cidr 0.0.0.0/0
               
             # Add application port access
+            echo "🔧 Adding application port access rule..."
             aws ec2 authorize-security-group-ingress \
-              --group-id $EC2_SG_ID \
+              --group-id $CERBERES_SG_ID \
               --protocol tcp \
               --port 3000 \
               --cidr 0.0.0.0/0
               
-            echo "EC2_SG_ID=$EC2_SG_ID" >> $GITHUB_ENV
-            echo "✅ Created EC2 security group: $EC2_SG_ID"
-          fi
-          
-          # Get RDS security group ID and update its rules
-          RDS_SG_ID=$(aws ec2 describe-security-groups --filters "Name=group-name,Values=cerberes-db-sg" "Name=vpc-id,Values=$DEFAULT_VPC_ID" --query "SecurityGroups[0].GroupId" --output text)
-          if [ "$RDS_SG_ID" != "None" ]; then
-            echo "DB_SG_EXISTS=true" >> $GITHUB_ENV
-            echo "DB_SG_ID=$RDS_SG_ID" >> $GITHUB_ENV
-            echo "✅ DB Security Group exists - will use existing one: $RDS_SG_ID"
-          else
-            echo "DB_SG_EXISTS=false" >> $GITHUB_ENV
-            echo "🆕 DB Security Group does not exist - will create new one"
-            
-            # Create RDS security group
-            echo "🔧 Creating RDS security group..."
-            RDS_SG_ID=$(aws ec2 create-security-group \
-              --group-name cerberes-db-sg \
-              --description "Security group for RDS database" \
-              --vpc-id $DEFAULT_VPC_ID \
-              --query "GroupId" --output text)
+            # Add PostgreSQL access within the security group
+            echo "🔧 Adding PostgreSQL access rule..."
+            aws ec2 authorize-security-group-ingress \
+              --group-id $CERBERES_SG_ID \
+              --protocol tcp \
+              --port 5432 \
+              --source-group $CERBERES_SG_ID
               
-            echo "DB_SG_ID=$RDS_SG_ID" >> $GITHUB_ENV
-            echo "✅ Created RDS security group: $RDS_SG_ID"
+            echo "CERBERES_SG_ID=$CERBERES_SG_ID" >> $GITHUB_ENV
+            echo "TF_VAR_security_group_id=$CERBERES_SG_ID" >> $GITHUB_ENV
+            echo "✅ Created Cerberes security group: $CERBERES_SG_ID"
+            
+            # Update the terraform.tfvars file with the security group ID
+            sed -i "s/security_group_id = \"\"/security_group_id = \"$CERBERES_SG_ID\"/g" terraform/terraform.tfvars
           fi
           
-          # Check if the EC2 security group rule exists and add it if needed
-          if [ "$EC2_SG_ID" != "None" ] && [ "$RDS_SG_ID" != "None" ]; then
-            RULE_EXISTS=$(aws ec2 describe-security-groups --group-id $RDS_SG_ID --query "SecurityGroups[0].IpPermissions[?FromPort==\`5432\` && ToPort==\`5432\` && contains(UserIdGroupPairs[*].GroupId, \`$EC2_SG_ID\`)].FromPort" --output text)
-            
-            if [ -z "$RULE_EXISTS" ]; then
-              echo "🔧 Adding EC2 security group to RDS ingress rules..."
-              aws ec2 authorize-security-group-ingress \
-                --group-id $RDS_SG_ID \
-                --protocol tcp \
-                --port 5432 \
-                --source-group $EC2_SG_ID
-              echo "✅ Added EC2 security group to RDS ingress rules"
-            else
-              echo "✅ RDS security group already allows access from EC2"
-            fi
+          # Check if the security group has the required rules
+          echo "🔍 Checking security group rules..."
+          
+          # Check for SSH rule
+          SSH_RULE=$(aws ec2 describe-security-groups --group-id $CERBERES_SG_ID --query "SecurityGroups[0].IpPermissions[?FromPort==\`22\` && ToPort==\`22\`].IpRanges[?CidrIp==\`0.0.0.0/0\`].CidrIp" --output text)
+          if [ -z "$SSH_RULE" ]; then
+            echo "🔧 Adding SSH access rule..."
+            aws ec2 authorize-security-group-ingress \
+              --group-id $CERBERES_SG_ID \
+              --protocol tcp \
+              --port 22 \
+              --cidr 0.0.0.0/0
           fi
+          
+          # Check for HTTP rule
+          HTTP_RULE=$(aws ec2 describe-security-groups --group-id $CERBERES_SG_ID --query "SecurityGroups[0].IpPermissions[?FromPort==\`80\` && ToPort==\`80\`].IpRanges[?CidrIp==\`0.0.0.0/0\`].CidrIp" --output text)
+          if [ -z "$HTTP_RULE" ]; then
+            echo "🔧 Adding HTTP access rule..."
+            aws ec2 authorize-security-group-ingress \
+              --group-id $CERBERES_SG_ID \
+              --protocol tcp \
+              --port 80 \
+              --cidr 0.0.0.0/0
+          fi
+          
+          # Check for application port rule
+          APP_RULE=$(aws ec2 describe-security-groups --group-id $CERBERES_SG_ID --query "SecurityGroups[0].IpPermissions[?FromPort==\`3000\` && ToPort==\`3000\`].IpRanges[?CidrIp==\`0.0.0.0/0\`].CidrIp" --output text)
+          if [ -z "$APP_RULE" ]; then
+            echo "🔧 Adding application port access rule..."
+            aws ec2 authorize-security-group-ingress \
+              --group-id $CERBERES_SG_ID \
+              --protocol tcp \
+              --port 3000 \
+              --cidr 0.0.0.0/0
+          fi
+          
+          # Check for PostgreSQL rule
+          PG_RULE=$(aws ec2 describe-security-groups --group-id $CERBERES_SG_ID --query "SecurityGroups[0].IpPermissions[?FromPort==\`5432\` && ToPort==\`5432\`].UserIdGroupPairs[?GroupId==\`$CERBERES_SG_ID\`].GroupId" --output text)
+          if [ -z "$PG_RULE" ]; then
+            echo "🔧 Adding PostgreSQL access rule..."
+            aws ec2 authorize-security-group-ingress \
+              --group-id $CERBERES_SG_ID \
+              --protocol tcp \
+              --port 5432 \
+              --source-group $CERBERES_SG_ID
+          fi
+          
+          echo "✅ Security group rules verified"
           
           # Check if EC2 instances with the tag Name=cerberes-instance exist
           EC2_COUNT=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=cerberes-instance" "Name=instance-state-name,Values=running,stopped" --query "length(Reservations[*].Instances[*])" --output text)
@@ -256,6 +288,7 @@ jobs:
           echo "🔍 Environment variables for Terraform:"
           echo "TF_VAR_existing_ec2_sg_id: $TF_VAR_existing_ec2_sg_id"
           echo "TF_VAR_existing_db_sg_id: $TF_VAR_existing_db_sg_id"
+          echo "TF_VAR_security_group_id: $TF_VAR_security_group_id"
 
       - name: Terraform Apply
         id: terraform-apply
@@ -348,6 +381,17 @@ jobs:
             tar -xzf dist.tar.gz
             tar -xzf node_modules.tar.gz
             rm dist.tar.gz node_modules.tar.gz
+            
+            # Verify the .env file is properly formatted (no line breaks in values)
+            echo "🔍 Verifying .env file format..."
+            if grep -q "DATABASE_URL=.*\n.*" .env; then
+              echo "⚠️ Found line breaks in DATABASE_URL, fixing..."
+              # Fix the .env file by ensuring each variable is on a single line
+              awk -F= '{if(NR==1) {printf "%s=%s\n",$1,$2} else {printf "%s=%s\n",$1,$2}}' .env > .env.fixed
+              mv .env.fixed .env
+            fi
+            
+            echo "✅ .env file verified"
           EOF
           
           echo "📦 Files deployed to EC2"
@@ -376,6 +420,39 @@ jobs:
             if ! command -v pm2 &> /dev/null; then
               echo "📦 Installing PM2..."
               sudo npm install -g pm2
+            fi
+            
+            # Install PostgreSQL client for testing database connection
+            if ! command -v psql &> /dev/null; then
+              echo "📦 Installing PostgreSQL client..."
+              sudo apt-get update
+              sudo apt-get install -y postgresql-client
+            fi
+            
+            # Test database connection
+            echo "🔍 Testing database connection..."
+            DB_URL=$(grep DATABASE_URL .env | cut -d= -f2-)
+            DB_HOST=$(echo $DB_URL | sed -n 's/.*@\(.*\)\/.*/\1/p')
+            DB_USER=$(echo $DB_URL | sed -n 's/postgres:\/\/\(.*\):.*/\1/p')
+            DB_PASSWORD=$(echo $DB_URL | sed -n 's/postgres:\/\/.*:\(.*\)@.*/\1/p')
+            DB_NAME=$(echo $DB_URL | sed -n 's/.*\/\(.*\)/\1/p')
+            
+            echo "🔍 Database host: $DB_HOST"
+            echo "🔍 Database user: $DB_USER"
+            echo "🔍 Database name: $DB_NAME"
+            
+            # Test connection with timeout
+            if PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -c "SELECT 1" -t -A -w -q; then
+              echo "✅ Database connection successful!"
+            else
+              echo "❌ Database connection failed!"
+              echo "⚠️ Checking network connectivity to database..."
+              nc -zv "$DB_HOST" 5432 || echo "❌ Cannot connect to database port"
+              echo "⚠️ Checking security group rules..."
+              curl -s http://169.254.169.254/latest/meta-data/security-groups
+              echo ""
+              curl -s http://169.254.169.254/latest/meta-data/local-ipv4
+              echo ""
             fi
             
             # Stop the application if it's running
