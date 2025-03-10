@@ -74,5 +74,4 @@ data "aws_db_instance" "existing_db" {
 output "db_endpoint" {
   value       = local.db_instance_exists ? data.aws_db_instance.existing_db[0].endpoint : (length(aws_db_instance.postgres) > 0 ? aws_db_instance.postgres[0].endpoint : null)
   description = "The endpoint of the RDS instance"
-} 
-} 
+}
