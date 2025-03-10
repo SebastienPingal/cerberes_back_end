@@ -15,75 +15,34 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      # Debug step to check secrets are available (values will be masked)
-      - name: Debug Secret Presence
-        run: |
-          if [ -n "${{ secrets.AWS_ACCESS_KEY_ID }}" ]; then 
-            echo "AWS_ACCESS_KEY_ID is set ✅"
-          else
-            echo "AWS_ACCESS_KEY_ID is NOT set ❌"
-          fi
-          
-          if [ -n "${{ secrets.AWS_SECRET_ACCESS_KEY }}" ]; then 
-            echo "AWS_SECRET_ACCESS_KEY is set ✅"
-          else
-            echo "AWS_SECRET_ACCESS_KEY is NOT set ❌"  
-          fi
-          
-          if [ -n "${{ secrets.AWS_REGION }}" ]; then 
-            echo "AWS_REGION is set ✅"
-          else
-            echo "AWS_REGION is NOT set ❌"
-          fi
-          
-          if [ -n "${{ secrets.JWT_SECRET }}" ]; then 
-            echo "JWT_SECRET is set ✅"
-          else
-            echo "JWT_SECRET is NOT set ❌"
-            echo "⚠️ JWT_SECRET is required for the application to function properly"
-          fi
-          
-          if [ -n "${{ secrets.EC2_SSH_PRIVATE_KEY }}" ]; then 
-            echo "EC2_SSH_PRIVATE_KEY is set ✅"
-            # Check if the key starts with the correct format
-            if [[ "${{ secrets.EC2_SSH_PRIVATE_KEY }}" == "-----BEGIN"* ]]; then
-              echo "SSH key appears to be in the correct format ✅"
-            else
-              echo "SSH key does not start with '-----BEGIN' - may be incorrectly formatted ❌"
-            fi
-          else
-            echo "EC2_SSH_PRIVATE_KEY is NOT set ❌"
-          fi
-
-      # Build the app directly instead of trying to download an artifact
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v2
+      # Download the artifact from CI instead of rebuilding
+      - name: Download build artifact
+        uses: dawidd6/action-download-artifact@v2
         with:
-          version: 8.6.0
+          workflow: ci.yml
+          workflow_conclusion: success
+          name: build-artifact
+          path: .
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: 16
-          cache: 'pnpm'
-
-      - name: Install dependencies
-        run: pnpm install
-
-      - name: Build application
-        run: pnpm build
-
-      - name: Prepare for production
+      # Verify downloaded artifacts
+      - name: Verify downloaded artifacts
         run: |
-          # Prune development dependencies to keep only production dependencies
-          echo "📦 Pruning dependencies for production..."
-          pnpm prune --prod
+          echo "🔍 Verifying downloaded artifacts..."
+          if [ -d "dist" ] && [ -f "package.json" ] && [ -f "pnpm-lock.yaml" ]; then
+            echo "✅ Artifacts downloaded successfully"
+          else
+            echo "❌ Artifacts missing or incomplete"
+            ls -la
+            exit 1
+          fi
 
+      # Setup Terraform
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
         with:
           terraform_version: 1.5.0
 
+      # Configure AWS credentials
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v2
         with:
@@ -91,6 +50,51 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
 
+      # Check for existing resources
+      - name: Check for existing resources
+        id: check-resources
+        run: |
+          echo "🔍 Checking for existing resources..."
+          
+          # Check for existing EC2 instance
+          EC2_COUNT=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=cerberes-instance" "Name=instance-state-name,Values=running,stopped,pending" --query "length(Reservations[*].Instances[*])" --output text)
+          
+          if [ "$EC2_COUNT" -gt "0" ]; then
+            echo "✅ Found existing EC2 instance"
+            EC2_ID=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=cerberes-instance" "Name=instance-state-name,Values=running,stopped,pending" --query "Reservations[0].Instances[0].InstanceId" --output text)
+            echo "EC2_ID=$EC2_ID" >> $GITHUB_ENV
+            echo "EC2_EXISTS=true" >> $GITHUB_ENV
+          else
+            echo "🆕 No existing EC2 instance found"
+            echo "EC2_EXISTS=false" >> $GITHUB_ENV
+          fi
+          
+          # Check for existing RDS instance
+          if aws rds describe-db-instances --db-instance-identifier cerberes-db &> /dev/null; then
+            echo "✅ Found existing RDS instance"
+            echo "RDS_EXISTS=true" >> $GITHUB_ENV
+          else
+            echo "🆕 No existing RDS instance found"
+            echo "RDS_EXISTS=false" >> $GITHUB_ENV
+          fi
+          
+          # Get the default VPC ID
+          DEFAULT_VPC_ID=$(aws ec2 describe-vpcs --filters "Name=isDefault,Values=true" --query "Vpcs[0].VpcId" --output text)
+          echo "DEFAULT_VPC_ID=$DEFAULT_VPC_ID" >> $GITHUB_ENV
+          
+          # Check for existing security group
+          CERBERES_SG_ID=$(aws ec2 describe-security-groups --filters "Name=group-name,Values=cerberes-sg" "Name=vpc-id,Values=$DEFAULT_VPC_ID" --query "SecurityGroups[0].GroupId" --output text)
+          
+          if [ "$CERBERES_SG_ID" != "None" ]; then
+            echo "✅ Found existing security group: $CERBERES_SG_ID"
+            echo "SG_EXISTS=true" >> $GITHUB_ENV
+            echo "CERBERES_SG_ID=$CERBERES_SG_ID" >> $GITHUB_ENV
+          else
+            echo "🆕 No existing security group found"
+            echo "SG_EXISTS=false" >> $GITHUB_ENV
+          fi
+
+      # Create terraform.tfvars file
       - name: Create terraform.tfvars
         run: |
           cat > terraform/terraform.tfvars << EOF
@@ -101,222 +105,65 @@ jobs:
           ssh_key_name    = "${{ secrets.SSH_KEY_NAME }}"
           ec2_instance_type = "t2.micro"
           db_instance_class = "db.t3.micro"
-          security_group_id = ""  # Will be populated by the next step if it exists
           EOF
           
-          echo "🔑 Created terraform.tfvars with database credentials"
+          # Add security group ID if it exists
+          if [ "${{ env.SG_EXISTS }}" == "true" ]; then
+            echo "security_group_id = \"${{ env.CERBERES_SG_ID }}\"" >> terraform/terraform.tfvars
+          else
+            echo "security_group_id = \"\"" >> terraform/terraform.tfvars
+          fi
+          
+          echo "🔑 Created terraform.tfvars with configuration"
 
-      # Check for existing resources and modify Terraform code accordingly
-      - name: Check for existing resources
-        id: check-resources
-        run: |
-          # Get the default VPC ID for security group checks
-          DEFAULT_VPC_ID=$(aws ec2 describe-vpcs --filters "Name=isDefault,Values=true" --query "Vpcs[0].VpcId" --output text)
-          echo "DEFAULT_VPC_ID=$DEFAULT_VPC_ID" >> $GITHUB_ENV
-          
-          # Check if we have existing VPCs
-          VPC_COUNT=$(aws ec2 describe-vpcs --query "length(Vpcs)" --output text)
-          
-          if [ "$VPC_COUNT" -gt "0" ]; then
-            echo "VPC_EXISTS=true" >> $GITHUB_ENV
-            echo "✅ VPCs exist - will use existing ones"
-            # Don't modify the Terraform file if we're starting from scratch
-            # sed -i '/data "aws_vpcs" "existing" {/,/count =/ s/count = 0/count = 1/g' terraform/main.tf
-          else
-            echo "VPC_EXISTS=false" >> $GITHUB_ENV
-            echo "🆕 No VPCs exist - will use default VPC"
-          fi
-          
-          # Use a single security group for both EC2 and RDS
-          CERBERES_SG_ID=$(aws ec2 describe-security-groups --filters "Name=group-name,Values=cerberes-sg" "Name=vpc-id,Values=$DEFAULT_VPC_ID" --query "SecurityGroups[0].GroupId" --output text)
-          
-          # Also check for the EC2-specific security group that might be in use
-          EC2_SG_ID=$(aws ec2 describe-security-groups --filters "Name=group-name,Values=cerberes-ec2-sg" "Name=vpc-id,Values=$DEFAULT_VPC_ID" --query "SecurityGroups[0].GroupId" --output text)
-          
-          # Check for RDS security group
-          DB_SG_ID=$(aws ec2 describe-security-groups --filters "Name=group-name,Values=cerberes-db-sg" "Name=vpc-id,Values=$DEFAULT_VPC_ID" --query "SecurityGroups[0].GroupId" --output text)
-          
-          # Store all security group IDs
-          if [ "$EC2_SG_ID" != "None" ]; then
-            echo "EC2_SG_EXISTS=true" >> $GITHUB_ENV
-            echo "EC2_SG_ID=$EC2_SG_ID" >> $GITHUB_ENV
-            echo "✅ EC2 Security Group exists: $EC2_SG_ID"
-            # Don't modify the Terraform file if we're starting from scratch
-            # sed -i '/data "aws_security_group" "ec2_existing" {/,/count =/ s/count = 0/count = 1/g' terraform/ec2.tf
-          else
-            echo "EC2_SG_EXISTS=false" >> $GITHUB_ENV
-          fi
-          
-          if [ "$DB_SG_ID" != "None" ]; then
-            echo "DB_SG_EXISTS=true" >> $GITHUB_ENV
-            echo "DB_SG_ID=$DB_SG_ID" >> $GITHUB_ENV
-            echo "✅ DB Security Group exists: $DB_SG_ID"
-            # Don't modify the Terraform file if we're starting from scratch
-            # sed -i '/data "aws_security_group" "db_existing" {/,/count =/ s/count = 0/count = 1/g' terraform/rds.tf
-          else
-            echo "DB_SG_EXISTS=false" >> $GITHUB_ENV
-          fi
-          
-          if [ "$CERBERES_SG_ID" != "None" ]; then
-            echo "SG_EXISTS=true" >> $GITHUB_ENV
-            echo "CERBERES_SG_ID=$CERBERES_SG_ID" >> $GITHUB_ENV
-            echo "✅ Cerberes Security Group exists - will use existing one: $CERBERES_SG_ID"
-            
-            # Store the security group ID for Terraform
-            echo "TF_VAR_security_group_id=$CERBERES_SG_ID" >> $GITHUB_ENV
-            
-            # Update the terraform.tfvars file with the security group ID
-            sed -i "s/security_group_id = \"\"/security_group_id = \"$CERBERES_SG_ID\"/g" terraform/terraform.tfvars
-          else
-            echo "SG_EXISTS=false" >> $GITHUB_ENV
-            echo "🆕 Cerberes Security Group does not exist - will create new one"
-            
-            # Create a single security group for both EC2 and RDS
-            echo "🔧 Creating Cerberes security group..."
-            CERBERES_SG_ID=$(aws ec2 create-security-group \
-              --group-name cerberes-sg \
-              --description "Security group for Cerberes application" \
-              --vpc-id $DEFAULT_VPC_ID \
-              --query "GroupId" --output text)
-            
-            if [ -z "$CERBERES_SG_ID" ] || [ "$CERBERES_SG_ID" == "None" ]; then
-              echo "❌ Failed to create security group"
-              exit 1
-            fi
-            
-            # Add SSH access
-            echo "🔧 Adding SSH access rule..."
-            aws ec2 authorize-security-group-ingress \
-              --group-id $CERBERES_SG_ID \
-              --protocol tcp \
-              --port 22 \
-              --cidr 0.0.0.0/0 || echo "⚠️ SSH rule couldn't be added"
-              
-            # Add HTTP access
-            echo "🔧 Adding HTTP access rule..."
-            aws ec2 authorize-security-group-ingress \
-              --group-id $CERBERES_SG_ID \
-              --protocol tcp \
-              --port 80 \
-              --cidr 0.0.0.0/0 || echo "⚠️ HTTP rule couldn't be added"
-              
-            # Add application port access
-            echo "🔧 Adding application port access rule..."
-            aws ec2 authorize-security-group-ingress \
-              --group-id $CERBERES_SG_ID \
-              --protocol tcp \
-              --port 3000 \
-              --cidr 0.0.0.0/0 || echo "⚠️ Application port rule couldn't be added"
-              
-            # Add PostgreSQL access within the security group
-            echo "🔧 Adding PostgreSQL access rule..."
-            aws ec2 authorize-security-group-ingress \
-              --group-id $CERBERES_SG_ID \
-              --protocol tcp \
-              --port 5432 \
-              --source-group $CERBERES_SG_ID || echo "⚠️ PostgreSQL rule couldn't be added"
-            
-            echo "CERBERES_SG_ID=$CERBERES_SG_ID" >> $GITHUB_ENV
-            echo "TF_VAR_security_group_id=$CERBERES_SG_ID" >> $GITHUB_ENV
-            echo "✅ Created Cerberes security group: $CERBERES_SG_ID"
-            
-            # Update the terraform.tfvars file with the security group ID
-            sed -i "s/security_group_id = \"\"/security_group_id = \"$CERBERES_SG_ID\"/g" terraform/terraform.tfvars
-          fi
-          
-          # Check for EC2 instances with the tag Name=cerberes-instance exist
-          EC2_COUNT=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=cerberes-instance" "Name=instance-state-name,Values=running,stopped" --query "length(Reservations[*].Instances[*])" --output text)
-          
-          if [ "$EC2_COUNT" -gt "0" ]; then
-            echo "EC2_INSTANCE_EXISTS=true" >> $GITHUB_ENV
-            EC2_ID=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=cerberes-instance" "Name=instance-state-name,Values=running,stopped" --query "Reservations[0].Instances[0].InstanceId" --output text)
-            echo "✅ EC2 Instance exists - will use existing one: $EC2_ID"
-            # Don't modify the Terraform file if we're starting from scratch
-            # sed -i '/data "aws_instances" "existing" {/,/count =/ s/count = 0/count = 1/g' terraform/ec2.tf
-          else
-            echo "EC2_INSTANCE_EXISTS=false" >> $GITHUB_ENV
-            echo "🆕 EC2 Instance does not exist - will create new one"
-          fi
-          
-          # Check if DB subnet group exists
-          if aws rds describe-db-subnet-groups --db-subnet-group-name cerberes-db-subnet-group &> /dev/null; then
-            echo "SUBNET_GROUP_EXISTS=true" >> $GITHUB_ENV
-            echo "✅ DB Subnet Group exists - will use existing one"
-            # Don't modify the Terraform file if we're starting from scratch
-            # sed -i '/data "aws_db_subnet_group" "existing" {/,/count =/ s/count = 0/count = 1/g' terraform/rds.tf
-          else
-            echo "SUBNET_GROUP_EXISTS=false" >> $GITHUB_ENV
-            echo "🆕 DB Subnet Group does not exist - will create new one"
-          fi
-          
-          # Check if DB instance exists
-          if aws rds describe-db-instances --db-instance-identifier cerberes-db &> /dev/null; then
-            echo "DB_INSTANCE_EXISTS=true" >> $GITHUB_ENV
-            echo "✅ DB Instance exists - will use existing one"
-            # Don't modify the Terraform file if we're starting from scratch
-            # sed -i '/data "aws_db_instance" "existing" {/,/count =/ s/count = 0/count = 1/g' terraform/rds.tf
-          else
-            echo "DB_INSTANCE_EXISTS=false" >> $GITHUB_ENV
-            echo "🆕 DB Instance does not exist - will create new one"
-          fi
-
+      # Initialize Terraform
       - name: Terraform Init
         working-directory: ./terraform
         run: terraform init
 
-      - name: Debug Terraform Variables
+      # Plan Terraform changes
+      - name: Terraform Plan
+        id: terraform-plan
         working-directory: ./terraform
-        run: |
-          echo "🔍 Checking terraform.auto.tfvars content:"
-          cat terraform.auto.tfvars || echo "File not found"
-          
-          echo "🔍 Environment variables for Terraform:"
-          echo "TF_VAR_existing_ec2_sg_id: $TF_VAR_existing_ec2_sg_id"
-          echo "TF_VAR_existing_db_sg_id: $TF_VAR_existing_db_sg_id"
-          echo "TF_VAR_security_group_id: $TF_VAR_security_group_id"
+        run: terraform plan -out=tfplan
 
+      # Apply Terraform configuration
       - name: Terraform Apply
         id: terraform-apply
         working-directory: ./terraform
-        run: terraform apply -auto-approve
+        run: terraform apply -auto-approve tfplan
 
-      # Get EC2 public IP directly from AWS CLI instead of Terraform output
-      - name: Get EC2 public IP
+      # Get deployment information
+      - name: Get deployment information
         if: steps.terraform-apply.outcome == 'success'
-        id: ec2_ip
         run: |
-          # Get the EC2 instance ID
-          EC2_ID=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=cerberes-instance" "Name=instance-state-name,Values=running" --query "Reservations[0].Instances[0].InstanceId" --output text)
+          # Get EC2 instance information
+          if [ "${{ env.EC2_EXISTS }}" == "true" ]; then
+            # Use the existing EC2 instance ID
+            EC2_ID="${{ env.EC2_ID }}"
+          else
+            # Get the newly created EC2 instance ID
+            EC2_ID=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=cerberes-instance" "Name=instance-state-name,Values=running,pending" --query "Reservations[0].Instances[0].InstanceId" --output text)
+          fi
           
-          # Get the public IP directly from AWS CLI
+          # Get the public IP
           IP_ADDRESS=$(aws ec2 describe-instances --instance-ids $EC2_ID --query "Reservations[0].Instances[0].PublicIpAddress" --output text)
-          
-          # Set the environment variable for use in subsequent steps
           echo "EC2_IP=$IP_ADDRESS" >> $GITHUB_ENV
-          
           echo "🖥️ EC2 instance public IP: $IP_ADDRESS"
-
-      # Get RDS endpoint directly from AWS CLI instead of Terraform output
-      - name: Get RDS endpoint
-        if: steps.terraform-apply.outcome == 'success'
-        id: rds_endpoint
-        run: |
-          # Get the RDS endpoint directly from AWS CLI
+          
+          # Get RDS endpoint
           DB_ENDPOINT=$(aws rds describe-db-instances --db-instance-identifier cerberes-db --query "DBInstances[0].Endpoint.Address" --output text)
-          
-          # Set the environment variable for use in subsequent steps
           echo "DB_ENDPOINT=$DB_ENDPOINT" >> $GITHUB_ENV
-          
           echo "🗄️ RDS endpoint: $DB_ENDPOINT"
 
-      # Add a delay to ensure EC2 instance is fully initialized
+      # Wait for EC2 instance to initialize
       - name: Wait for EC2 instance to initialize
         if: steps.terraform-apply.outcome == 'success'
         run: |
           echo "⏳ Waiting 60 seconds for EC2 instance to fully initialize..."
           sleep 60
 
-      # Create a temporary SSH key file
+      # Setup SSH key
       - name: Setup SSH key
         if: steps.terraform-apply.outcome == 'success'
         run: |
@@ -328,6 +175,7 @@ jobs:
           # Test SSH connection
           ssh -o StrictHostKeyChecking=no -i ~/.ssh/ec2_key ubuntu@${{ env.EC2_IP }} "echo SSH connection test successful"
 
+      # Deploy application to EC2
       - name: Deploy application to EC2
         if: steps.terraform-apply.outcome == 'success'
         run: |
@@ -339,39 +187,37 @@ jobs:
           PORT=3000
           EOF
           
-          # Create app directory on the server if it doesn't exist
+          # Create app directory on the server
           ssh -o StrictHostKeyChecking=no -i ~/.ssh/ec2_key ubuntu@${{ env.EC2_IP }} "mkdir -p /home/ubuntu/app"
           
-          echo "🧹 Cleaning up old files on server to free space..."
+          # Clean up old files
           ssh -o StrictHostKeyChecking=no -i ~/.ssh/ec2_key ubuntu@${{ env.EC2_IP }} "rm -rf /home/ubuntu/app/node_modules /home/ubuntu/app/dist"
           
           # Transfer configuration files
           echo "📦 Transferring configuration files..."
-          scp -o StrictHostKeyChecking=no -o ConnectTimeout=60 -C -i ~/.ssh/ec2_key .env package.json pnpm-lock.yaml ubuntu@${{ env.EC2_IP }}:/home/ubuntu/app/
+          scp -o StrictHostKeyChecking=no -i ~/.ssh/ec2_key .env package.json pnpm-lock.yaml ubuntu@${{ env.EC2_IP }}:/home/ubuntu/app/
           
           # Compress and transfer dist directory
           echo "📦 Compressing and transferring built code..."
           tar -czf dist.tar.gz dist/
-          scp -o StrictHostKeyChecking=no -o ConnectTimeout=60 -i ~/.ssh/ec2_key dist.tar.gz ubuntu@${{ env.EC2_IP }}:/home/ubuntu/app/
+          scp -o StrictHostKeyChecking=no -i ~/.ssh/ec2_key dist.tar.gz ubuntu@${{ env.EC2_IP }}:/home/ubuntu/app/
           
           # Compress and transfer node_modules directory
           echo "📦 Compressing and transferring node_modules..."
           tar -czf node_modules.tar.gz node_modules/
-          scp -o StrictHostKeyChecking=no -o ConnectTimeout=60 -i ~/.ssh/ec2_key node_modules.tar.gz ubuntu@${{ env.EC2_IP }}:/home/ubuntu/app/
+          scp -o StrictHostKeyChecking=no -i ~/.ssh/ec2_key node_modules.tar.gz ubuntu@${{ env.EC2_IP }}:/home/ubuntu/app/
           
           # Extract the archives on the server
-          echo "📦 Extracting files on server..."
           ssh -o StrictHostKeyChecking=no -i ~/.ssh/ec2_key ubuntu@${{ env.EC2_IP }} << 'EOF'
             cd /home/ubuntu/app
             tar -xzf dist.tar.gz
             tar -xzf node_modules.tar.gz
             rm dist.tar.gz node_modules.tar.gz
             
-            # Verify the .env file is properly formatted (no line breaks in values)
+            # Verify the .env file is properly formatted
             echo "🔍 Verifying .env file format..."
             if grep -q "DATABASE_URL=.*\n.*" .env; then
               echo "⚠️ Found line breaks in DATABASE_URL, fixing..."
-              # Fix the .env file by ensuring each variable is on a single line
               awk -F= '{if(NR==1) {printf "%s=%s\n",$1,$2} else {printf "%s=%s\n",$1,$2}}' .env > .env.fixed
               mv .env.fixed .env
             fi
@@ -381,92 +227,17 @@ jobs:
           
           echo "📦 Files deployed to EC2"
 
+      # Configure and start application
       - name: Configure and start application
         if: steps.terraform-apply.outcome == 'success'
         run: |
-          # Get EC2 and RDS security group information
-          echo "🔧 Getting security group information..."
-          
-          # Get EC2 instance ID and security group
-          EC2_ID=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=cerberes-instance" "Name=instance-state-name,Values=running" --query "Reservations[0].Instances[0].InstanceId" --output text)
-          EC2_SG_ID=$(aws ec2 describe-instances --instance-ids $EC2_ID --query "Reservations[0].Instances[0].SecurityGroups[0].GroupId" --output text)
-          EC2_PRIVATE_IP=$(aws ec2 describe-instances --instance-ids $EC2_ID --query "Reservations[0].Instances[0].PrivateIpAddress" --output text)
-          
-          # Get RDS instance ID and security group
-          DB_SG_ID=$(aws rds describe-db-instances --db-instance-identifier cerberes-db --query "DBInstances[0].VpcSecurityGroups[0].VpcSecurityGroupId" --output text)
-          DB_ENDPOINT=$(aws rds describe-db-instances --db-instance-identifier cerberes-db --query "DBInstances[0].Endpoint.Address" --output text)
-          DB_PRIVATE_IP=$(dig +short $DB_ENDPOINT || echo "Could not resolve DB endpoint")
-          
-          echo "🔍 EC2 Instance ID: $EC2_ID"
-          echo "🔍 EC2 Security Group ID: $EC2_SG_ID"
-          echo "🔍 EC2 Private IP: $EC2_PRIVATE_IP"
-          echo "🔍 RDS Security Group ID: $DB_SG_ID"
-          echo "🔍 RDS Endpoint: $DB_ENDPOINT"
-          echo "🔍 RDS Private IP: $DB_PRIVATE_IP"
-          
-          # Add rule to allow EC2 to connect to RDS
-          if [ -n "$EC2_SG_ID" ] && [ -n "$DB_SG_ID" ]; then
-            echo "🔧 Adding rule to allow EC2 security group to access RDS security group..."
-            aws ec2 authorize-security-group-ingress \
-              --group-id $DB_SG_ID \
-              --protocol tcp \
-              --port 5432 \
-              --source-group $EC2_SG_ID || echo "⚠️ Rule already exists or couldn't be added"
-            
-            echo "✅ Added rule to allow EC2 security group to access RDS"
-            
-            # Also add a rule for the EC2 private IP specifically
-            echo "🔧 Adding rule to allow EC2 private IP to access RDS security group..."
-            aws ec2 authorize-security-group-ingress \
-              --group-id $DB_SG_ID \
-              --protocol tcp \
-              --port 5432 \
-              --cidr ${EC2_PRIVATE_IP}/32 || echo "⚠️ Rule already exists or couldn't be added"
-              
-            echo "✅ Added rule to allow EC2 private IP to access RDS"
-            
-            # Also add a rule to allow all traffic from the EC2 subnet
-            EC2_SUBNET=$(echo $EC2_PRIVATE_IP | cut -d. -f1-3).0/24
-            echo "🔧 Adding rule to allow EC2 subnet ($EC2_SUBNET) to access RDS security group..."
-            aws ec2 authorize-security-group-ingress \
-              --group-id $DB_SG_ID \
-              --protocol tcp \
-              --port 5432 \
-              --cidr $EC2_SUBNET || echo "⚠️ Rule already exists or couldn't be added"
-              
-            echo "✅ Added rule to allow EC2 subnet to access RDS"
-          else
-            echo "⚠️ Could not add security group rule - missing security group IDs"
-          fi
-          
-          # Create a temporary AWS credentials file to pass to the EC2 instance
-          echo "🔧 Creating temporary AWS credentials file..."
-          mkdir -p ~/.aws
-          cat > ~/.aws/temp_credentials << EOF
-          [default]
-          aws_access_key_id=${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws_secret_access_key=${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          region=${{ secrets.AWS_REGION }}
-          EOF
-          
-          # Transfer AWS credentials to the EC2 instance
-          echo "📦 Transferring AWS credentials to EC2 instance..."
-          scp -o StrictHostKeyChecking=no -o ConnectTimeout=60 -i ~/.ssh/ec2_key ~/.aws/temp_credentials ubuntu@${{ env.EC2_IP }}:/home/ubuntu/aws_credentials
-          
-          # Use ssh directly instead of the action
-          ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=60 -i ~/.ssh/ec2_key ubuntu@${{ env.EC2_IP }} << 'EOF'
+          # Use ssh to configure and start the application
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/ec2_key ubuntu@${{ env.EC2_IP }} << 'EOF'
             cd /home/ubuntu/app
             
-            # Set up AWS credentials
-            echo "🔧 Setting up AWS credentials..."
-            mkdir -p ~/.aws
-            mv /home/ubuntu/aws_credentials ~/.aws/credentials
-            chmod 600 ~/.aws/credentials
-            
-            # Install newer version of Node.js
+            # Install Node.js 18 if needed
             echo "🔍 Checking Node.js version..."
-            NODE_VERSION=$(node -v)
-            echo "Current Node.js version: $NODE_VERSION"
+            NODE_VERSION=$(node -v || echo "none")
             
             if [[ "$NODE_VERSION" != "v18"* ]]; then
               echo "📦 Installing Node.js 18 LTS..."
@@ -476,81 +247,17 @@ jobs:
               echo "✅ Node.js $(node -v) installed"
             fi
             
-            # Install PM2 globally
+            # Install PM2 if needed
             if ! command -v pm2 &> /dev/null; then
               echo "📦 Installing PM2..."
               sudo npm install -g pm2
             fi
             
-            # Install PostgreSQL client for testing database connection
+            # Install PostgreSQL client for database connection testing
             if ! command -v psql &> /dev/null; then
               echo "📦 Installing PostgreSQL client..."
               sudo apt-get update
               sudo apt-get install -y postgresql-client
-            fi
-            
-            # Install network diagnostic tools
-            echo "📦 Installing network diagnostic tools..."
-            sudo apt-get install -y dnsutils traceroute net-tools iputils-ping
-            
-            # Install AWS CLI if not available
-            if ! command -v aws &> /dev/null; then
-              echo "📦 Installing AWS CLI..."
-              curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-              sudo apt-get install -y unzip
-              unzip awscliv2.zip
-              sudo ./aws/install
-              rm -rf aws awscliv2.zip
-            fi
-            
-            # Get instance metadata for debugging
-            echo "🔍 Getting instance metadata..."
-            INSTANCE_ID=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)
-            PRIVATE_IP=$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)
-            SECURITY_GROUPS=$(curl -s http://169.254.169.254/latest/meta-data/security-groups)
-            REGION=$(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone | sed 's/[a-z]$//')
-            
-            echo "🔍 EC2 Instance ID: $INSTANCE_ID"
-            echo "🔍 EC2 Private IP: $PRIVATE_IP"
-            echo "🔍 EC2 Security Groups: $SECURITY_GROUPS"
-            echo "🔍 Region: $REGION"
-            
-            # Get security group IDs
-            echo "🔧 Getting security group IDs..."
-            EC2_SG_ID=$(aws ec2 describe-security-groups --filters "Name=group-name,Values=$SECURITY_GROUPS" --query "SecurityGroups[0].GroupId" --output text)
-            echo "🔍 EC2 Security Group ID: $EC2_SG_ID"
-            
-            # Get RDS security group ID
-            DB_URL=$(grep DATABASE_URL .env | cut -d= -f2-)
-            DB_HOST=$(echo $DB_URL | sed -n 's/.*@\(.*\)\/.*/\1/p')
-            DB_IDENTIFIER=$(echo $DB_HOST | cut -d. -f1)
-            
-            echo "🔍 RDS Identifier: $DB_IDENTIFIER"
-            DB_SG_ID=$(aws rds describe-db-instances --db-instance-identifier $DB_IDENTIFIER --query "DBInstances[0].VpcSecurityGroups[0].VpcSecurityGroupId" --output text)
-            echo "🔍 RDS Security Group ID: $DB_SG_ID"
-            
-            # Add rule to allow EC2 to connect to RDS
-            if [ -n "$EC2_SG_ID" ] && [ -n "$DB_SG_ID" ] && [ "$EC2_SG_ID" != "None" ] && [ "$DB_SG_ID" != "None" ]; then
-              echo "🔧 Adding rule to allow EC2 security group to access RDS security group..."
-              aws ec2 authorize-security-group-ingress \
-                --group-id $DB_SG_ID \
-                --protocol tcp \
-                --port 5432 \
-                --source-group $EC2_SG_ID || echo "⚠️ Rule already exists or couldn't be added"
-              
-              echo "✅ Added rule to allow EC2 security group to access RDS"
-              
-              # Also add a rule for the EC2 private IP specifically
-              echo "🔧 Adding rule to allow EC2 private IP to access RDS security group..."
-              aws ec2 authorize-security-group-ingress \
-                --group-id $DB_SG_ID \
-                --protocol tcp \
-                --port 5432 \
-                --cidr ${PRIVATE_IP}/32 || echo "⚠️ Rule already exists or couldn't be added"
-                
-              echo "✅ Added rule to allow EC2 private IP to access RDS"
-            else
-              echo "⚠️ Could not add security group rule - missing security group IDs"
             fi
             
             # Test database connection
@@ -561,47 +268,19 @@ jobs:
             DB_PASSWORD=$(echo $DB_URL | sed -n 's/postgres:\/\/.*:\(.*\)@.*/\1/p')
             DB_NAME=$(echo $DB_URL | sed -n 's/.*\/\(.*\)/\1/p')
             
-            echo "🔍 Database host: $DB_HOST"
-            echo "🔍 Database user: $DB_USER"
-            echo "🔍 Database name: $DB_NAME"
-            
-            # Test basic network connectivity to the database
-            echo "🔍 Testing basic network connectivity to database..."
-            ping -c 3 $DB_HOST || echo "⚠️ Ping failed, but this might be expected if ICMP is blocked"
-            
-            # Test connection to database port
-            echo "🔍 Testing connection to database port..."
-            timeout 10 nc -zv $DB_HOST 5432 || echo "⚠️ Connection to port 5432 failed"
-            
-            # Test connection with timeout
             echo "🔍 Testing PostgreSQL connection..."
             if PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -c "SELECT 1" -t -A -w -q; then
               echo "✅ Database connection successful!"
             else
               echo "❌ Database connection failed!"
-              echo "⚠️ Checking network connectivity to database..."
-              
-              # Try to resolve the hostname
-              echo "🔍 Resolving database hostname..."
-              host $DB_HOST || echo "❌ Cannot resolve hostname"
-              
-              # Get the RDS instance's private IP
-              echo "🔍 Getting RDS private IP..."
-              DB_IP=$(host $DB_HOST | grep "has address" | awk '{print $4}')
-              echo "🔍 RDS IP address: $DB_IP"
-              
-              # Check route to the database
-              echo "🔍 Checking route to database..."
-              traceroute -n $DB_HOST || echo "❌ Traceroute failed"
-              
-              echo "⚠️ Please check that the security group allows traffic from $PRIVATE_IP to the RDS instance on port 5432"
+              exit 1
             fi
             
-            # Stop the application if it's running
+            # Restart the application
             echo "🔄 Restarting application..."
             pm2 stop cerberes || echo "🤖 App not running"
             
-            # Start the application with more detailed logging
+            # Start the application
             echo "🚀 Starting application..."
             pm2 start dist/src/server.js --name cerberes --log-date-format 'YYYY-MM-DD HH:mm:ss.SSS' --merge-logs
             pm2 save
@@ -621,33 +300,10 @@ jobs:
             pm2 startup | grep "sudo" | bash || echo "⚠️ PM2 startup command failed, but continuing..."
             pm2 save
             
-            # Verify the application is running and listening on port 3000
-            echo "🔍 Verifying application status..."
-            pm2 list
-            
-            # Check if the application is listening on port 3000
-            if command -v netstat &> /dev/null; then
-              if netstat -tulpn 2>/dev/null | grep -q ":3000"; then
-                echo "✅ Application is listening on port 3000"
-              else
-                echo "⚠️ Application may not be listening on port 3000"
-                netstat -tulpn | grep node
-              fi
-            else
-              echo "⚠️ netstat not available, installing net-tools..."
-              sudo apt-get update
-              sudo apt-get install -y net-tools
-              if netstat -tulpn | grep -q ":3000"; then
-                echo "✅ Application is listening on port 3000"
-              else
-                echo "⚠️ Application may not be listening on port 3000"
-                netstat -tulpn | grep node
-              fi
-            fi
-            
             echo "🚀 Deployment completed"
           EOF
-            
+
+      # Cleanup on failure
       - name: Cleanup on failure
         if: failure() && steps.terraform-apply.outcome == 'failure'
         working-directory: ./terraform

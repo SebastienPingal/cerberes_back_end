@@ -30,142 +30,72 @@ provider "aws" {
   }
 }
 
-# Look for existing VPCs
-data "aws_vpcs" "existing" {
-  count = 0  # Always set to 0 to avoid errors
-  
-  filter {
-    name   = "isDefault"
-    values = ["true"]
-  }
-}
-
-# Use the default VPC if available
+# Use the default VPC
 data "aws_vpc" "default" {
-  count = length(data.aws_vpcs.existing) > 0 ? 0 : 1
   default = true
 }
 
 # Local variables for VPC and subnet selection
 locals {
-  # Determine if we should use an existing VPC - safely handle empty tuples
-  use_existing_vpc = false  # Default to not using existing VPC
+  # Use the default VPC ID
+  vpc_id = data.aws_vpc.default.id
   
-  # Get the VPC ID to use
-  vpc_id = length(data.aws_vpc.default) > 0 ? data.aws_vpc.default[0].id : null
+  # Get public subnets in the default VPC
+  public_subnet_ids = length(data.aws_subnets.public.ids) > 0 ? data.aws_subnets.public.ids : []
   
-  # Flag to indicate if we need to create subnets
-  create_subnets = local.vpc_id != null
+  # Get private subnets in the default VPC, or use public subnets if no private subnets exist
+  private_subnet_ids = length(data.aws_subnets.private.ids) > 0 ? data.aws_subnets.private.ids : local.public_subnet_ids
+  
+  # Get the public subnet ID to use for EC2
+  public_subnet_id = length(local.public_subnet_ids) > 0 ? local.public_subnet_ids[0] : null
 }
 
-# Look for existing public subnets in the VPC
+# Get public subnets in the default VPC
 data "aws_subnets" "public" {
-  count = 0  # Always set to 0 to avoid errors
-  
   filter {
     name   = "vpc-id"
-    values = [local.vpc_id != null ? local.vpc_id : "vpc-placeholder"]
+    values = [local.vpc_id]
+  }
+  
+  filter {
+    name   = "map-public-ip-on-launch"
+    values = ["true"]
   }
 }
 
-# Look for existing private subnets in the VPC
+# Get private subnets in the default VPC
 data "aws_subnets" "private" {
-  count = 0  # Always set to 0 to avoid errors
-  
   filter {
     name   = "vpc-id"
-    values = [local.vpc_id != null ? local.vpc_id : "vpc-placeholder"]
-  }
-}
-
-# Public subnet for the EC2 instance
-resource "aws_subnet" "public_subnet" {
-  count                   = local.create_subnets ? 1 : 0
-  vpc_id                  = local.vpc_id
-  cidr_block              = "10.0.1.0/24"
-  availability_zone       = "${var.aws_region}a"
-  map_public_ip_on_launch = true
-  
-  tags = {
-    Name = "${var.app_name}-public-subnet"
-  }
-}
-
-# Private subnet 1 for the RDS instance
-resource "aws_subnet" "private_subnet_1" {
-  count             = local.create_subnets ? 1 : 0
-  vpc_id            = local.vpc_id
-  cidr_block        = "10.0.2.0/24"
-  availability_zone = "${var.aws_region}a"
-  
-  tags = {
-    Name = "${var.app_name}-private-subnet-1"
-  }
-}
-
-# Private subnet 2 for the RDS instance (RDS requires at least 2 subnets in different AZs)
-resource "aws_subnet" "private_subnet_2" {
-  count             = local.create_subnets ? 1 : 0
-  vpc_id            = local.vpc_id
-  cidr_block        = "10.0.3.0/24"
-  availability_zone = "${var.aws_region}b"
-  
-  tags = {
-    Name = "${var.app_name}-private-subnet-2"
-  }
-}
-
-# Internet Gateway for the public subnet
-resource "aws_internet_gateway" "igw" {
-  count  = local.create_subnets ? 1 : 0
-  vpc_id = local.vpc_id
-  
-  tags = {
-    Name = "${var.app_name}-igw"
-  }
-}
-
-# Route table for the public subnet
-resource "aws_route_table" "public_rt" {
-  count  = local.create_subnets ? 1 : 0
-  vpc_id = local.vpc_id
-  
-  route {
-    cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.igw[0].id
+    values = [local.vpc_id]
   }
   
-  tags = {
-    Name = "${var.app_name}-public-rt"
+  filter {
+    name   = "map-public-ip-on-launch"
+    values = ["false"]
   }
 }
 
-# Associate the route table with the public subnet
-resource "aws_route_table_association" "public_rta" {
-  count          = local.create_subnets ? 1 : 0
-  subnet_id      = aws_subnet.public_subnet[0].id
-  route_table_id = aws_route_table.public_rt[0].id
-}
-
-# Output the VPC ID for reference
+# Output the VPC ID
 output "vpc_id" {
-  description = "VPC ID"
   value       = local.vpc_id
+  description = "The ID of the VPC"
 }
 
-# Output the region for reference
+# Output the AWS region
 output "aws_region" {
-  description = "AWS region"
   value       = var.aws_region
+  description = "The AWS region"
 }
 
-# Output the subnet IDs
+# Output the public subnet ID
 output "public_subnet_id" {
-  description = "Public subnet ID"
-  value       = length(aws_subnet.public_subnet) > 0 ? aws_subnet.public_subnet[0].id : null
+  value       = local.public_subnet_id
+  description = "The ID of the public subnet"
 }
 
+# Output the private subnet IDs
 output "private_subnet_ids" {
-  description = "Private subnet IDs"
-  value       = length(aws_subnet.private_subnet_1) > 0 && length(aws_subnet.private_subnet_2) > 0 ? [aws_subnet.private_subnet_1[0].id, aws_subnet.private_subnet_2[0].id] : []
-} 
+  value       = local.private_subnet_ids
+  description = "The IDs of the private subnets"
+}

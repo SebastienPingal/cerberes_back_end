@@ -21,7 +21,7 @@ jobs:
             - name: Setup Node.js
               uses: actions/setup-node@v3
               with:
-                  node-version: 16
+                  node-version: 18
                   cache: 'pnpm'
 
             - name: Install dependencies
@@ -45,14 +45,14 @@ jobs:
             - name: Setup Node.js
               uses: actions/setup-node@v3
               with:
-                  node-version: 16
+                  node-version: 18
                   cache: 'pnpm'
 
             - name: Install dependencies
               run: pnpm install
 
             - name: Run tests
-              run: pnpm test || echo "No tests defined yet" # Allow pipeline to continue if no tests defined
+              run: pnpm test || echo "📋 No tests defined yet" # Allow pipeline to continue if no tests defined
 
     build:
         runs-on: ubuntu-latest
@@ -69,7 +69,7 @@ jobs:
             - name: Setup Node.js
               uses: actions/setup-node@v3
               with:
-                  node-version: 16
+                  node-version: 18
                   cache: 'pnpm'
 
             - name: Install dependencies
@@ -78,11 +78,19 @@ jobs:
             - name: Build application
               run: pnpm build
 
+            - name: Prepare for production
+              run: |
+                  # Prune development dependencies to keep only production dependencies
+                  echo "📦 Pruning dependencies for production..."
+                  pnpm prune --prod
+
             - name: Upload build artifact
               uses: actions/upload-artifact@v4
               with:
                   name: build-artifact
                   path: |
                       dist/
+                      node_modules/
                       package.json
                       pnpm-lock.yaml
+                  retention-days: 1
