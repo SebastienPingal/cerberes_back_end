@@ -130,13 +130,15 @@ jobs:
           if [ "$EC2_SG_ID" != "None" ]; then
             echo "EC2_SG_EXISTS=true" >> $GITHUB_ENV
             echo "EC2_SG_ID=$EC2_SG_ID" >> $GITHUB_ENV
-            echo "✅ EC2 Security Group exists - will use existing one"
+            echo "✅ EC2 Security Group exists - will use existing one: $EC2_SG_ID"
             # Instead of modifying count, pass the ID as a variable
             echo "TF_VAR_existing_ec2_sg_id=$EC2_SG_ID" >> $GITHUB_ENV
+            echo "existing_ec2_sg_id=\"$EC2_SG_ID\"" >> terraform/terraform.auto.tfvars
           else
             echo "EC2_SG_EXISTS=false" >> $GITHUB_ENV
             echo "🆕 EC2 Security Group does not exist - will create new one"
             echo "TF_VAR_existing_ec2_sg_id=" >> $GITHUB_ENV
+            echo "existing_ec2_sg_id=\"\"" >> terraform/terraform.auto.tfvars
           fi
           
           # Get RDS security group ID and update its rules
@@ -144,9 +146,10 @@ jobs:
           if [ "$RDS_SG_ID" != "None" ]; then
             echo "DB_SG_EXISTS=true" >> $GITHUB_ENV
             echo "DB_SG_ID=$RDS_SG_ID" >> $GITHUB_ENV
-            echo "✅ DB Security Group exists - will use existing one"
+            echo "✅ DB Security Group exists - will use existing one: $RDS_SG_ID"
             # Instead of modifying count, pass the ID as a variable
             echo "TF_VAR_existing_db_sg_id=$RDS_SG_ID" >> $GITHUB_ENV
+            echo "existing_db_sg_id=\"$RDS_SG_ID\"" >> terraform/terraform.auto.tfvars
             
             # Check if the EC2 security group rule exists and add it if needed
             if [ "$EC2_SG_ID" != "None" ]; then
@@ -168,6 +171,7 @@ jobs:
             echo "DB_SG_EXISTS=false" >> $GITHUB_ENV
             echo "🆕 DB Security Group does not exist - will create new one"
             echo "TF_VAR_existing_db_sg_id=" >> $GITHUB_ENV
+            echo "existing_db_sg_id=\"\"" >> terraform/terraform.auto.tfvars
           fi
           
           # Check if EC2 instances with the tag Name=cerberes-instance exist
@@ -209,6 +213,16 @@ jobs:
       - name: Terraform Init
         working-directory: ./terraform
         run: terraform init
+
+      - name: Debug Terraform Variables
+        working-directory: ./terraform
+        run: |
+          echo "🔍 Checking terraform.auto.tfvars content:"
+          cat terraform.auto.tfvars || echo "File not found"
+          
+          echo "🔍 Environment variables for Terraform:"
+          echo "TF_VAR_existing_ec2_sg_id: $TF_VAR_existing_ec2_sg_id"
+          echo "TF_VAR_existing_db_sg_id: $TF_VAR_existing_db_sg_id"
 
       - name: Terraform Plan
         working-directory: ./terraform
