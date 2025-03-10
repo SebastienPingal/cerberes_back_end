@@ -73,6 +73,12 @@ jobs:
       - name: Build application
         run: pnpm build
 
+      - name: Prepare for production
+        run: |
+          # Prune development dependencies to keep only production dependencies
+          echo "📦 Pruning dependencies for production..."
+          pnpm prune --prod
+
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
         with:
@@ -249,10 +255,6 @@ jobs:
           JWT_SECRET=${{ secrets.JWT_SECRET }}
           PORT=3000
           EOF
-          
-          # Copy the node_modules directory to ensure all dependencies are included
-          echo "📦 Preparing dependencies for deployment..."
-          pnpm install --prod
           
           # Use scp directly instead of the action
           scp -o StrictHostKeyChecking=no -i ~/.ssh/ec2_key -r dist/ node_modules/ package.json pnpm-lock.yaml .env ubuntu@${{ env.EC2_IP }}:/home/ubuntu/app/
