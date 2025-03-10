@@ -78,88 +78,94 @@ data "aws_subnets" "private" {
   }
 }
 
-# Public subnet for EC2 - only created if needed
+# Public subnet for the EC2 instance
 resource "aws_subnet" "public_subnet" {
-  count                   = local.create_subnets && (length(data.aws_subnets.public) == 0 || length(data.aws_subnets.public[0].ids) == 0) ? 1 : 0
+  count                   = local.create_subnets ? 1 : 0
   vpc_id                  = local.vpc_id
   cidr_block              = "10.0.1.0/24"
   availability_zone       = "${var.aws_region}a"
   map_public_ip_on_launch = true
+  
   tags = {
     Name = "${var.app_name}-public-subnet"
   }
 }
 
-# Private subnet for RDS - only created if needed
+# Private subnet 1 for the RDS instance
 resource "aws_subnet" "private_subnet_1" {
-  count             = local.create_subnets && (length(data.aws_subnets.private) == 0 || length(data.aws_subnets.private[0].ids) < 2) ? 1 : 0
+  count             = local.create_subnets ? 1 : 0
   vpc_id            = local.vpc_id
   cidr_block        = "10.0.2.0/24"
   availability_zone = "${var.aws_region}a"
+  
   tags = {
     Name = "${var.app_name}-private-subnet-1"
   }
 }
 
-# Second private subnet for RDS (required for DB subnet group) - only created if needed
+# Private subnet 2 for the RDS instance (RDS requires at least 2 subnets in different AZs)
 resource "aws_subnet" "private_subnet_2" {
-  count             = local.create_subnets && (length(data.aws_subnets.private) == 0 || length(data.aws_subnets.private[0].ids) < 2) ? 1 : 0
+  count             = local.create_subnets ? 1 : 0
   vpc_id            = local.vpc_id
   cidr_block        = "10.0.3.0/24"
   availability_zone = "${var.aws_region}b"
+  
   tags = {
     Name = "${var.app_name}-private-subnet-2"
   }
 }
 
-# Internet Gateway - only created if needed
+# Internet Gateway for the public subnet
 resource "aws_internet_gateway" "igw" {
-  count  = local.create_subnets && (length(data.aws_subnets.public) == 0 || length(data.aws_subnets.public[0].ids) == 0) ? 1 : 0
+  count  = local.create_subnets ? 1 : 0
   vpc_id = local.vpc_id
+  
   tags = {
     Name = "${var.app_name}-igw"
   }
 }
 
-# Route Table for public subnet - only created if needed
+# Route table for the public subnet
 resource "aws_route_table" "public_rt" {
-  count  = local.create_subnets && (length(data.aws_subnets.public) == 0 || length(data.aws_subnets.public[0].ids) == 0) ? 1 : 0
+  count  = local.create_subnets ? 1 : 0
   vpc_id = local.vpc_id
+  
   route {
     cidr_block = "0.0.0.0/0"
     gateway_id = aws_internet_gateway.igw[0].id
   }
+  
   tags = {
     Name = "${var.app_name}-public-rt"
   }
 }
 
-# Route Table Association - only created if needed
+# Associate the route table with the public subnet
 resource "aws_route_table_association" "public_rta" {
-  count          = local.create_subnets && (length(data.aws_subnets.public) == 0 || length(data.aws_subnets.public[0].ids) == 0) ? 1 : 0
+  count          = local.create_subnets ? 1 : 0
   subnet_id      = aws_subnet.public_subnet[0].id
   route_table_id = aws_route_table.public_rt[0].id
 }
 
 # Output the VPC ID for reference
 output "vpc_id" {
-  description = "ID of the VPC"
+  description = "VPC ID"
   value       = local.vpc_id
 }
 
 # Output the region for reference
 output "aws_region" {
-  description = "AWS region used"
+  description = "AWS region"
   value       = var.aws_region
 }
 
 # Output the subnet IDs
 output "public_subnet_id" {
-  description = "ID of the public subnet"
-  value       = length(data.aws_subnets.public) > 0 && length(data.aws_subnets.public[0].ids) > 0 ? data.aws_subnets.public[0].ids[0] : (length(aws_subnet.public_subnet) > 0 ? aws_subnet.public_subnet[0].id : null)
+  description = "Public subnet ID"
+  value       = length(aws_subnet.public_subnet) > 0 ? aws_subnet.public_subnet[0].id : null
 }
 
 output "private_subnet_ids" {
-  description = "IDs of the private subnets"
-  value       = length(data.aws_subnets.private) > 0 && length(data.aws_subnets.private[0].ids) >= 2 ? [data.aws_subnets.private[0].ids[0], data.aws_subnets.private[0].ids[1]] : (length(aws_subnet.private_subnet_1) > 0 && length(aws_subnet.private_subnet_2) > 0 ? [aws_subnet.private_subnet_1[0].id, aws_subnet.private_subnet_2[0].id] : [])
+  description = "Private subnet IDs"
+  value       = length(aws_subnet.private_subnet_1) > 0 && length(aws_subnet.private_subnet_2) > 0 ? [aws_subnet.private_subnet_1[0].id, aws_subnet.private_subnet_2[0].id] : []
 } 
