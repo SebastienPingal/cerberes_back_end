@@ -44,3 +44,9 @@ variable "security_group_id" {
   type        = string
   default     = ""
 }
+
+variable "existing_ec2_sg_id" {
+  description = "The ID of an existing EC2 security group to use (optional)"
+  type        = string
+  default     = ""
+}

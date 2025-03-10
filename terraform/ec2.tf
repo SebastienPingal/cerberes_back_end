@@ -61,17 +61,23 @@ locals {
   
   # Get the IP to use for output
   instance_ip = local.existing_ip != "" ? local.existing_ip : local.new_instance_ip
+  
+  # Check if we already have an instance
+  instance_exists = length(data.aws_instances.existing.ids) > 0
+  
+  # Get the existing instance ID if available
+  existing_instance_id = local.instance_exists ? data.aws_instances.existing.ids[0] : null
 }
 
 # EC2 Instance for hosting the application
 resource "aws_instance" "app_instance" {
-  count         = local.create_instance ? 1 : 0
-  ami           = "ami-0905a3c97561e0b69" # Ubuntu 22.04 LTS in eu-west-1
-  instance_type = var.ec2_instance_type
-  key_name      = var.ssh_key_name
+  count                  = local.create_instance ? 1 : 0
+  ami                    = "ami-0905a3c97561e0b69" # Ubuntu 22.04 LTS in eu-west-1
+  instance_type          = var.ec2_instance_type
+  key_name               = var.ssh_key_name
   
-  # Use the public subnet
-  subnet_id = aws_subnet.public_subnet[0].id
+  # Use the public subnet from main.tf
+  subnet_id = local.public_subnet_id
   
   # Use the security group ID from the variable if provided, otherwise use the EC2 security group
   vpc_security_group_ids = var.security_group_id != "" ? [var.security_group_id] : [data.aws_security_group.ec2_sg[0].id]
@@ -110,7 +116,6 @@ resource "aws_instance" "app_instance" {
   lifecycle {
     create_before_destroy = true
   }
-
 }
 
 # Output the public IP - using the local variable for safety
