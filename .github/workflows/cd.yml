@@ -37,6 +37,18 @@ jobs:
           else
             echo "AWS_REGION is NOT set ❌"
           fi
+          
+          if [ -n "${{ secrets.EC2_SSH_PRIVATE_KEY }}" ]; then 
+            echo "EC2_SSH_PRIVATE_KEY is set ✅"
+            # Check if the key starts with the correct format
+            if [[ "${{ secrets.EC2_SSH_PRIVATE_KEY }}" == "-----BEGIN"* ]]; then
+              echo "SSH key appears to be in the correct format ✅"
+            else
+              echo "SSH key does not start with '-----BEGIN' - may be incorrectly formatted ❌"
+            fi
+          else
+            echo "EC2_SSH_PRIVATE_KEY is NOT set ❌"
+          fi
 
       # Build the app directly instead of trying to download an artifact
       - name: Setup pnpm
@@ -210,32 +222,38 @@ jobs:
           echo "⏳ Waiting 60 seconds for EC2 instance to fully initialize..."
           sleep 60
 
+      # Create a temporary SSH key file
+      - name: Setup SSH key
+        if: steps.terraform-apply.outcome == 'success'
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_SSH_PRIVATE_KEY }}" > ~/.ssh/ec2_key
+          chmod 600 ~/.ssh/ec2_key
+          echo "🔑 SSH key file created"
+          
+          # Test SSH connection
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/ec2_key ec2-user@${{ env.EC2_IP }} "echo SSH connection test successful"
+
       - name: Deploy application to EC2
         if: steps.terraform-apply.outcome == 'success'
-        uses: appleboy/scp-action@master
-        with:
-          host: ${{ env.EC2_IP }}
-          username: ec2-user
-          key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
-          source: "dist/,package.json,pnpm-lock.yaml,.env"
-          target: "/home/ec2-user/app"
+        run: |
+          # Use scp directly instead of the action
+          scp -o StrictHostKeyChecking=no -i ~/.ssh/ec2_key -r dist/ package.json pnpm-lock.yaml .env ec2-user@${{ env.EC2_IP }}:/home/ec2-user/app/
+          echo "📦 Files deployed to EC2"
 
       - name: Configure and start application
         if: steps.terraform-apply.outcome == 'success'
-        uses: appleboy/ssh-action@master
-        with:
-          host: ${{ env.EC2_IP }}
-          username: ec2-user
-          key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
-          script: |
+        run: |
+          # Use ssh directly instead of the action
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/ec2_key ec2-user@${{ env.EC2_IP }} << 'EOF'
             cd /home/ec2-user/app
             
             # Add production environment variables
-            cat > .env << EOF
+            cat > .env << INNEREOF
             NODE_ENV=production
             DATABASE_URL=postgres://${{ secrets.DB_USERNAME }}:${{ secrets.DB_PASSWORD }}@${{ env.DB_ENDPOINT }}/cerberes
             PORT=3000
-            EOF
+            INNEREOF
             
             # Install dependencies and start with PM2
             pnpm install --prod
@@ -244,6 +262,7 @@ jobs:
             pm2 save
             
             echo "🚀 Deployment completed"
+          EOF
             
       - name: Cleanup on failure
         if: failure() && steps.terraform-apply.outcome == 'failure'
