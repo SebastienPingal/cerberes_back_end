@@ -33,6 +33,11 @@ provider "aws" {
 # Look for existing VPCs
 data "aws_vpcs" "existing" {
   count = 0  # Always set to 0 to avoid errors
+  
+  filter {
+    name   = "isDefault"
+    values = ["true"]
+  }
 }
 
 # Use the default VPC if available
@@ -56,11 +61,21 @@ locals {
 # Look for existing public subnets in the VPC
 data "aws_subnets" "public" {
   count = 0  # Always set to 0 to avoid errors
+  
+  filter {
+    name   = "vpc-id"
+    values = [local.vpc_id != null ? local.vpc_id : "vpc-placeholder"]
+  }
 }
 
 # Look for existing private subnets in the VPC
 data "aws_subnets" "private" {
   count = 0  # Always set to 0 to avoid errors
+  
+  filter {
+    name   = "vpc-id"
+    values = [local.vpc_id != null ? local.vpc_id : "vpc-placeholder"]
+  }
 }
 
 # Public subnet for EC2 - only created if needed

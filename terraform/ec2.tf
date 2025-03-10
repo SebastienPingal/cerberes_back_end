@@ -9,7 +9,7 @@ data "aws_security_group" "ec2_existing" {
   
   filter {
     name   = "vpc-id"
-    values = [local.vpc_id]
+    values = [local.vpc_id != null ? local.vpc_id : "vpc-placeholder"]
   }
 }
 
@@ -17,19 +17,29 @@ data "aws_security_group" "ec2_existing" {
 data "aws_security_group" "ec2_sg" {
   count = var.security_group_id != "" ? 0 : 1
   name   = "${var.app_name}-ec2-sg"
-  vpc_id = local.vpc_id
+  vpc_id = local.vpc_id != null ? local.vpc_id : "vpc-placeholder"
 }
 
 # Get the shared security group if provided
 data "aws_security_group" "shared_sg" {
   count = var.security_group_id != "" ? 1 : 0
-  id    = var.security_group_id
+  id    = var.security_group_id != "" ? var.security_group_id : "sg-placeholder"
 }
 
 # Use existing EC2 instance if it exists
 # This is handled in the workflow by checking for existing resources
 data "aws_instances" "existing" {
   count = 0  # Always set to 0 to avoid errors
+  
+  filter {
+    name   = "tag:Name"
+    values = ["${var.app_name}-instance"]
+  }
+  
+  filter {
+    name   = "instance-state-name"
+    values = ["running", "stopped"]
+  }
 }
 
 # Local variable to determine if we should create a new instance

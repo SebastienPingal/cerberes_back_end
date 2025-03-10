@@ -9,7 +9,7 @@ data "aws_security_group" "db_existing" {
   
   filter {
     name   = "vpc-id"
-    values = [local.vpc_id]
+    values = [local.vpc_id != null ? local.vpc_id : "vpc-placeholder"]
   }
 }
 
@@ -17,13 +17,14 @@ data "aws_security_group" "db_existing" {
 data "aws_security_group" "db_sg" {
   count = var.security_group_id != "" ? 0 : 1
   name   = "${var.app_name}-db-sg"
-  vpc_id = local.vpc_id
+  vpc_id = local.vpc_id != null ? local.vpc_id : "vpc-placeholder"
 }
 
 # Use an existing DB subnet group if it exists
 # This is handled in the workflow by checking for existing resources
 data "aws_db_subnet_group" "existing" {
   count = 0  # Always set to 0 to avoid errors
+  name  = "${var.app_name}-db-subnet-group"  # Required argument
 }
 
 # DB Subnet Group - only created if it doesn't already exist
@@ -41,7 +42,8 @@ resource "aws_db_subnet_group" "db_subnet_group" {
 # Use existing RDS instance if it exists
 # This is handled in the workflow by checking for existing resources
 data "aws_db_instance" "existing" {
-  count = 0  # Always set to 0 to avoid errors
+  count                  = 0  # Always set to 0 to avoid errors
+  db_instance_identifier = "${var.app_name}-db"  # Required argument
 }
 
 # Local variables for RDS
