@@ -164,6 +164,16 @@ jobs:
             echo "subnet_b_id = \"\"" >> terraform/terraform.tfvars
           fi
           
+          # Check if internet gateway exists in the VPC
+          IGW_COUNT=$(aws ec2 describe-internet-gateways --filters "Name=attachment.vpc-id,Values=$DEFAULT_VPC_ID" --query "length(InternetGateways)" --output text)
+          if [ "$IGW_COUNT" -gt "0" ]; then
+            echo "✅ Found existing internet gateway"
+            echo "create_igw = false" >> terraform/terraform.tfvars
+          else
+            echo "🆕 No existing internet gateway found"
+            echo "create_igw = true" >> terraform/terraform.tfvars
+          fi
+          
           echo "🔑 Created terraform.tfvars with configuration"
 
       # Initialize Terraform

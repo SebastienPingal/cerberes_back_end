@@ -67,9 +67,8 @@ locals {
   subnet_a_id = var.subnet_a_exists ? var.subnet_a_id : (length(aws_subnet.private_subnet_a) > 0 ? aws_subnet.private_subnet_a[0].id : null)
   subnet_b_id = var.subnet_b_exists ? var.subnet_b_id : (length(aws_subnet.private_subnet_b) > 0 ? aws_subnet.private_subnet_b[0].id : null)
   
-  # Check if internet gateway exists
-  igw_exists = length(data.aws_internet_gateways.existing.ids) > 0
-  igw_id = local.igw_exists ? data.aws_internet_gateways.existing.ids[0] : (length(aws_internet_gateway.igw) > 0 ? aws_internet_gateway.igw[0].id : null)
+  # Internet gateway ID - try to use existing one first, then our created one if it exists
+  igw_id = try(data.aws_internet_gateway.existing.id, length(aws_internet_gateway.igw) > 0 ? aws_internet_gateway.igw[0].id : null)
   
   # VPC CIDR information
   vpc_cidr = data.aws_vpc.selected.cidr_block
@@ -104,11 +103,14 @@ data "aws_subnets" "private" {
 }
 
 # Check for existing internet gateway in the VPC
-data "aws_internet_gateways" "existing" {
+data "aws_internet_gateway" "existing" {
   filter {
     name   = "attachment.vpc-id"
     values = [local.vpc_id]
   }
+  
+  # This prevents errors if no internet gateway is found
+  depends_on = [data.aws_vpc.default]
 }
 
 # Output the VPC ID
@@ -175,11 +177,17 @@ resource "aws_subnet" "private_subnet_b" {
 
 # Create an Internet Gateway only if one doesn't exist
 resource "aws_internet_gateway" "igw" {
-  count  = local.igw_exists ? 0 : 1
+  # Only create if no internet gateway is attached to the VPC
+  count = var.create_igw ? 1 : 0
   vpc_id = local.vpc_id
   
   tags = {
     Name = "${var.app_name}-igw"
+  }
+  
+  # This prevents errors if the VPC already has an internet gateway
+  lifecycle {
+    create_before_destroy = true
   }
 }
 

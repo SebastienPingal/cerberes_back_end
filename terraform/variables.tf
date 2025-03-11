@@ -74,3 +74,9 @@ variable "subnet_b_id" {
   type        = string
   default     = ""
 }
+
+variable "create_igw" {
+  description = "Whether to create an internet gateway"
+  type        = bool
+  default     = true
+}
