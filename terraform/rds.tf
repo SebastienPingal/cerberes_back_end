@@ -1,13 +1,7 @@
-# Check if DB subnet group exists - use try/catch to handle the case where it doesn't exist
-data "aws_db_subnet_group" "existing" {
-  count = 0
-  name  = "${var.app_name}-db-subnet-group"
-}
-
 # DB Subnet Group for RDS - only create if it doesn't already exist
 resource "aws_db_subnet_group" "db_subnet_group" {
   # Only create if we have at least 2 subnets
-  count      = length(local.private_subnet_ids) >= 2 ? 1 : 0
+  count      = 0  # Set to 0 to prevent creation since it already exists
   name       = "${var.app_name}-db-subnet-group"
   subnet_ids = local.private_subnet_ids
 
@@ -26,11 +20,8 @@ data "aws_db_instances" "existing" {
 
 # Local variables for RDS
 locals {
-  # Check if DB subnet group exists - use try to handle the case where the subnet group doesn't exist
-  db_subnet_group_exists = false  # We'll handle this with a try/catch approach
-  
-  # Get the subnet group name to use - use the existing one if it exists, otherwise use the one we created
-  db_subnet_group_name = length(aws_db_subnet_group.db_subnet_group) > 0 ? aws_db_subnet_group.db_subnet_group[0].name : null
+  # DB subnet group name - use the existing one
+  db_subnet_group_name = "${var.app_name}-db-subnet-group"
   
   # Check if DB instance exists
   db_instance_exists = length(data.aws_db_instances.existing.instance_identifiers) > 0
