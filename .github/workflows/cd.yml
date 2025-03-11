@@ -87,9 +87,33 @@ jobs:
             echo "DB_SUBNET_GROUP_EXISTS=false" >> $GITHUB_ENV
           fi
           
-          # Get the default VPC ID
+          # Check for existing subnets
           DEFAULT_VPC_ID=$(aws ec2 describe-vpcs --filters "Name=isDefault,Values=true" --query "Vpcs[0].VpcId" --output text)
           echo "DEFAULT_VPC_ID=$DEFAULT_VPC_ID" >> $GITHUB_ENV
+          
+          # Check for private subnet A
+          SUBNET_A_COUNT=$(aws ec2 describe-subnets --filters "Name=tag:Name,Values=cerberes-private-subnet-a" "Name=vpc-id,Values=$DEFAULT_VPC_ID" --query "length(Subnets)" --output text)
+          if [ "$SUBNET_A_COUNT" -gt "0" ]; then
+            echo "✅ Found existing private subnet A"
+            SUBNET_A_ID=$(aws ec2 describe-subnets --filters "Name=tag:Name,Values=cerberes-private-subnet-a" "Name=vpc-id,Values=$DEFAULT_VPC_ID" --query "Subnets[0].SubnetId" --output text)
+            echo "SUBNET_A_ID=$SUBNET_A_ID" >> $GITHUB_ENV
+            echo "SUBNET_A_EXISTS=true" >> $GITHUB_ENV
+          else
+            echo "🆕 No existing private subnet A found"
+            echo "SUBNET_A_EXISTS=false" >> $GITHUB_ENV
+          fi
+          
+          # Check for private subnet B
+          SUBNET_B_COUNT=$(aws ec2 describe-subnets --filters "Name=tag:Name,Values=cerberes-private-subnet-b" "Name=vpc-id,Values=$DEFAULT_VPC_ID" --query "length(Subnets)" --output text)
+          if [ "$SUBNET_B_COUNT" -gt "0" ]; then
+            echo "✅ Found existing private subnet B"
+            SUBNET_B_ID=$(aws ec2 describe-subnets --filters "Name=tag:Name,Values=cerberes-private-subnet-b" "Name=vpc-id,Values=$DEFAULT_VPC_ID" --query "Subnets[0].SubnetId" --output text)
+            echo "SUBNET_B_ID=$SUBNET_B_ID" >> $GITHUB_ENV
+            echo "SUBNET_B_EXISTS=true" >> $GITHUB_ENV
+          else
+            echo "🆕 No existing private subnet B found"
+            echo "SUBNET_B_EXISTS=false" >> $GITHUB_ENV
+          fi
           
           # Check for existing security group
           CERBERES_SG_ID=$(aws ec2 describe-security-groups --filters "Name=group-name,Values=cerberes-sg" "Name=vpc-id,Values=$DEFAULT_VPC_ID" --query "SecurityGroups[0].GroupId" --output text)
@@ -121,6 +145,23 @@ jobs:
             echo "security_group_id = \"${{ env.CERBERES_SG_ID }}\"" >> terraform/terraform.tfvars
           else
             echo "security_group_id = \"\"" >> terraform/terraform.tfvars
+          fi
+          
+          # Add subnet existence flags
+          if [ "${{ env.SUBNET_A_EXISTS }}" == "true" ]; then
+            echo "subnet_a_exists = true" >> terraform/terraform.tfvars
+            echo "subnet_a_id = \"${{ env.SUBNET_A_ID }}\"" >> terraform/terraform.tfvars
+          else
+            echo "subnet_a_exists = false" >> terraform/terraform.tfvars
+            echo "subnet_a_id = \"\"" >> terraform/terraform.tfvars
+          fi
+          
+          if [ "${{ env.SUBNET_B_EXISTS }}" == "true" ]; then
+            echo "subnet_b_exists = true" >> terraform/terraform.tfvars
+            echo "subnet_b_id = \"${{ env.SUBNET_B_ID }}\"" >> terraform/terraform.tfvars
+          else
+            echo "subnet_b_exists = false" >> terraform/terraform.tfvars
+            echo "subnet_b_id = \"\"" >> terraform/terraform.tfvars
           fi
           
           echo "🔑 Created terraform.tfvars with configuration"

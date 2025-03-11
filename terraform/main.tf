@@ -48,6 +48,19 @@ locals {
   
   # Get the public subnet ID to use for EC2
   public_subnet_id = length(local.public_subnet_ids) > 0 ? local.public_subnet_ids[0] : null
+  
+  # Create subnets in two availability zones for RDS (minimum required)
+  # Check for existing subnets with the same name
+  existing_private_subnets = data.aws_subnets.existing_private_subnets.ids
+  existing_subnet_count = length(data.aws_subnets.existing_private_subnets.ids)
+  
+  # Use the variables from CD workflow to determine if subnets exist
+  create_subnet_a = !var.subnet_a_exists
+  create_subnet_b = !var.subnet_b_exists
+  
+  # IDs to use for the subnets (either existing or new)
+  subnet_a_id = var.subnet_a_exists ? var.subnet_a_id : (length(aws_subnet.private_subnet_a) > 0 ? aws_subnet.private_subnet_a[0].id : null)
+  subnet_b_id = var.subnet_b_exists ? var.subnet_b_id : (length(aws_subnet.private_subnet_b) > 0 ? aws_subnet.private_subnet_b[0].id : null)
 }
 
 # Get public subnets in the default VPC
@@ -98,4 +111,76 @@ output "public_subnet_id" {
 output "private_subnet_ids" {
   value       = local.private_subnet_ids
   description = "The IDs of the private subnets"
+}
+
+# Create subnets in two availability zones for RDS (minimum required)
+# Check for existing subnets with the same name
+data "aws_subnets" "existing_private_subnets" {
+  filter {
+    name   = "vpc-id"
+    values = [local.vpc_id]
+  }
+  
+  filter {
+    name   = "tag:Name"
+    values = ["${var.app_name}-private-subnet-a", "${var.app_name}-private-subnet-b"]
+  }
+}
+
+resource "aws_subnet" "private_subnet_a" {
+  count             = local.create_subnet_a ? 1 : 0
+  vpc_id            = local.vpc_id
+  cidr_block        = "10.0.1.0/24"
+  availability_zone = "${var.aws_region}a"
+  
+  tags = {
+    Name = "${var.app_name}-private-subnet-a"
+  }
+}
+
+resource "aws_subnet" "private_subnet_b" {
+  count             = local.create_subnet_b ? 1 : 0
+  vpc_id            = local.vpc_id
+  cidr_block        = "10.0.2.0/24"
+  availability_zone = "${var.aws_region}b"
+  
+  tags = {
+    Name = "${var.app_name}-private-subnet-b"
+  }
+}
+
+# Create an Internet Gateway
+resource "aws_internet_gateway" "igw" {
+  vpc_id = local.vpc_id
+  
+  tags = {
+    Name = "${var.app_name}-igw"
+  }
+}
+
+# Create a route table for the private subnets
+resource "aws_route_table" "private_rt" {
+  vpc_id = local.vpc_id
+  
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.igw.id
+  }
+  
+  tags = {
+    Name = "${var.app_name}-private-rt"
+  }
+}
+
+# Associate the route table with the private subnets
+resource "aws_route_table_association" "private_rta_a" {
+  count          = length(aws_subnet.private_subnet_a)
+  subnet_id      = aws_subnet.private_subnet_a[count.index].id
+  route_table_id = aws_route_table.private_rt.id
+}
+
+resource "aws_route_table_association" "private_rta_b" {
+  count          = length(aws_subnet.private_subnet_b)
+  subnet_id      = aws_subnet.private_subnet_b[count.index].id
+  route_table_id = aws_route_table.private_rt.id
 }

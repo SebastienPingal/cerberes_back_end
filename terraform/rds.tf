@@ -1,9 +1,10 @@
-# DB Subnet Group for RDS - only create if it doesn't already exist
+# DB Subnet Group for RDS - minimum required configuration
 resource "aws_db_subnet_group" "db_subnet_group" {
-  # Only create if we have at least 2 subnets
-  count      = 0  # Set to 0 to prevent creation since it already exists
   name       = "${var.app_name}-db-subnet-group"
-  subnet_ids = local.private_subnet_ids
+  subnet_ids = compact([
+    local.subnet_a_id,
+    local.subnet_b_id
+  ])
 
   tags = {
     Name = "${var.app_name}-db-subnet-group"
@@ -20,8 +21,8 @@ data "aws_db_instances" "existing" {
 
 # Local variables for RDS
 locals {
-  # DB subnet group name - use the existing one
-  db_subnet_group_name = "${var.app_name}-db-subnet-group"
+  # DB subnet group name - use the one we just created
+  db_subnet_group_name = aws_db_subnet_group.db_subnet_group.name
   
   # Check if DB instance exists
   db_instance_exists = length(data.aws_db_instances.existing.instance_identifiers) > 0

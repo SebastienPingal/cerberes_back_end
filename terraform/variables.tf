@@ -50,3 +50,27 @@ variable "existing_ec2_sg_id" {
   type        = string
   default     = ""
 }
+
+variable "subnet_a_exists" {
+  description = "Whether private subnet A already exists"
+  type        = bool
+  default     = false
+}
+
+variable "subnet_a_id" {
+  description = "The ID of an existing private subnet A (optional)"
+  type        = string
+  default     = ""
+}
+
+variable "subnet_b_exists" {
+  description = "Whether private subnet B already exists"
+  type        = bool
+  default     = false
+}
+
+variable "subnet_b_id" {
+  description = "The ID of an existing private subnet B (optional)"
+  type        = string
+  default     = ""
+}
