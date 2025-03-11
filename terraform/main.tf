@@ -35,6 +35,11 @@ data "aws_vpc" "default" {
   default = true
 }
 
+# Get VPC CIDR block
+data "aws_vpc" "selected" {
+  id = data.aws_vpc.default.id
+}
+
 # Local variables for VPC and subnet selection
 locals {
   # Use the default VPC ID
@@ -61,6 +66,15 @@ locals {
   # IDs to use for the subnets (either existing or new)
   subnet_a_id = var.subnet_a_exists ? var.subnet_a_id : (length(aws_subnet.private_subnet_a) > 0 ? aws_subnet.private_subnet_a[0].id : null)
   subnet_b_id = var.subnet_b_exists ? var.subnet_b_id : (length(aws_subnet.private_subnet_b) > 0 ? aws_subnet.private_subnet_b[0].id : null)
+  
+  # Check if internet gateway exists
+  igw_exists = length(data.aws_internet_gateways.existing.ids) > 0
+  igw_id = local.igw_exists ? data.aws_internet_gateways.existing.ids[0] : (length(aws_internet_gateway.igw) > 0 ? aws_internet_gateway.igw[0].id : null)
+  
+  # VPC CIDR information
+  vpc_cidr = data.aws_vpc.selected.cidr_block
+  # Extract first two octets from VPC CIDR (e.g., "172.31" from "172.31.0.0/16")
+  vpc_prefix = join(".", slice(split(".", local.vpc_cidr), 0, 2))
 }
 
 # Get public subnets in the default VPC
@@ -86,6 +100,14 @@ data "aws_subnets" "private" {
   filter {
     name   = "map-public-ip-on-launch"
     values = ["false"]
+  }
+}
+
+# Check for existing internet gateway in the VPC
+data "aws_internet_gateways" "existing" {
+  filter {
+    name   = "attachment.vpc-id"
+    values = [local.vpc_id]
   }
 }
 
@@ -130,7 +152,8 @@ data "aws_subnets" "existing_private_subnets" {
 resource "aws_subnet" "private_subnet_a" {
   count             = local.create_subnet_a ? 1 : 0
   vpc_id            = local.vpc_id
-  cidr_block        = "10.0.1.0/24"
+  # Use CIDR blocks based on VPC CIDR
+  cidr_block        = "${local.vpc_prefix}.101.0/24"
   availability_zone = "${var.aws_region}a"
   
   tags = {
@@ -141,7 +164,8 @@ resource "aws_subnet" "private_subnet_a" {
 resource "aws_subnet" "private_subnet_b" {
   count             = local.create_subnet_b ? 1 : 0
   vpc_id            = local.vpc_id
-  cidr_block        = "10.0.2.0/24"
+  # Use CIDR blocks based on VPC CIDR
+  cidr_block        = "${local.vpc_prefix}.102.0/24"
   availability_zone = "${var.aws_region}b"
   
   tags = {
@@ -149,8 +173,9 @@ resource "aws_subnet" "private_subnet_b" {
   }
 }
 
-# Create an Internet Gateway
+# Create an Internet Gateway only if one doesn't exist
 resource "aws_internet_gateway" "igw" {
+  count  = local.igw_exists ? 0 : 1
   vpc_id = local.vpc_id
   
   tags = {
@@ -164,7 +189,7 @@ resource "aws_route_table" "private_rt" {
   
   route {
     cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.igw.id
+    gateway_id = local.igw_id
   }
   
   tags = {
