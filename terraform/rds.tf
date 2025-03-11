@@ -32,7 +32,6 @@ resource "aws_db_instance" "postgres" {
   count                = local.db_instance_exists ? 0 : 1
   identifier           = "${var.app_name}-db"
   engine               = "postgres"
-  engine_version       = "13.7"
   instance_class       = var.db_instance_class
   allocated_storage    = 20
   storage_type         = "gp2"
