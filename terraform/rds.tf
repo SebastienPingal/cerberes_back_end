@@ -1,11 +1,16 @@
-# DB Subnet Group for RDS - minimum required configuration
-resource "aws_db_subnet_group" "db_subnet_group" {
-  name       = "${var.app_name}-db-subnet-group"
-  subnet_ids = slice(local.private_subnet_ids, 0, min(2, length(local.private_subnet_ids)))
+# Data source for existing DB subnet group
+data "aws_db_subnet_group" "existing" {
+  count = var.db_subnet_group_exists ? 1 : 0  # Only look if we're using an existing subnet group
+  name  = "${var.app_name}-db-subnet-group"
+}
 
-  tags = {
-    Name = "${var.app_name}-db-subnet-group"
-  }
+# Local variables for RDS
+locals {
+  # DB subnet group name - use the existing one if it exists, otherwise create new
+  db_subnet_group_name = var.db_subnet_group_exists ? data.aws_db_subnet_group.existing[0].name : "${var.app_name}-db-subnet-group"
+  
+  # Check if DB instance exists
+  db_instance_exists = length(data.aws_db_instances.existing.instance_identifiers) > 0
 }
 
 # Check for existing RDS instance
@@ -14,15 +19,6 @@ data "aws_db_instances" "existing" {
     name   = "db-instance-id"
     values = ["${var.app_name}-db"]
   }
-}
-
-# Local variables for RDS
-locals {
-  # DB subnet group name - use the one we just created
-  db_subnet_group_name = aws_db_subnet_group.db_subnet_group.name
-  
-  # Check if DB instance exists
-  db_instance_exists = length(data.aws_db_instances.existing.instance_identifiers) > 0
 }
 
 # RDS PostgreSQL instance - only create if no instance exists

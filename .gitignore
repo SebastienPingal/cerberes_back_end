@@ -8,3 +8,8 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 .DS_Store
+terraform.tfvars
+*.tfvars
+*.tfvars.json
+.terraform/
+.terraform.lock.hcl

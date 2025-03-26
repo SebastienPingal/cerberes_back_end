@@ -57,75 +57,62 @@ jobs:
           echo "🔍 Checking for existing resources..."
           
           # Check for existing EC2 instance
-          EC2_COUNT=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=cerberes-instance" "Name=instance-state-name,Values=running,stopped,pending" --query "length(Reservations[*].Instances[*])" --output text)
-          
-          if [ "$EC2_COUNT" -gt "0" ]; then
-            echo "✅ Found existing EC2 instance"
-            EC2_ID=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=cerberes-instance" "Name=instance-state-name,Values=running,stopped,pending" --query "Reservations[0].Instances[0].InstanceId" --output text)
-            echo "EC2_ID=$EC2_ID" >> $GITHUB_ENV
-            echo "EC2_EXISTS=true" >> $GITHUB_ENV
+          EC2_ID=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=cerberes-instance" "Name=instance-state-name,Values=running,stopped,pending" --query "Reservations[0].Instances[0].InstanceId" --output text || echo "")
+          if [ "$EC2_ID" != "" ]; then
+            echo "✅ Found existing EC2 instance: $EC2_ID"
           else
             echo "🆕 No existing EC2 instance found"
-            echo "EC2_EXISTS=false" >> $GITHUB_ENV
           fi
+          echo "EC2_ID=$EC2_ID" >> $GITHUB_ENV
           
           # Check for existing RDS instance
-          if aws rds describe-db-instances --db-instance-identifier cerberes-db &> /dev/null; then
-            echo "✅ Found existing RDS instance"
-            echo "RDS_EXISTS=true" >> $GITHUB_ENV
+          RDS_ENDPOINT=$(aws rds describe-db-instances --db-instance-identifier cerberes-db --query "DBInstances[0].Endpoint.Address" --output text || echo "")
+          if [ "$RDS_ENDPOINT" != "" ]; then
+            echo "✅ Found existing RDS instance: $RDS_ENDPOINT"
           else
             echo "🆕 No existing RDS instance found"
-            echo "RDS_EXISTS=false" >> $GITHUB_ENV
           fi
+          echo "RDS_ENDPOINT=$RDS_ENDPOINT" >> $GITHUB_ENV
           
           # Check for existing DB subnet group
-          if aws rds describe-db-subnet-groups --db-subnet-group-name cerberes-db-subnet-group &> /dev/null; then
-            echo "✅ Found existing DB subnet group"
-            echo "DB_SUBNET_GROUP_EXISTS=true" >> $GITHUB_ENV
+          DB_SUBNET_GROUP_ID=$(aws rds describe-db-subnet-groups --db-subnet-group-name cerberes-db-subnet-group --query "DBSubnetGroups[0].DBSubnetGroupName" --output text || echo "")
+          if [ "$DB_SUBNET_GROUP_ID" != "" ]; then
+            echo "✅ Found existing DB subnet group: $DB_SUBNET_GROUP_ID"
           else
             echo "🆕 No existing DB subnet group found"
-            echo "DB_SUBNET_GROUP_EXISTS=false" >> $GITHUB_ENV
           fi
+          echo "DB_SUBNET_GROUP_ID=$DB_SUBNET_GROUP_ID" >> $GITHUB_ENV
           
           # Check for existing subnets
           DEFAULT_VPC_ID=$(aws ec2 describe-vpcs --filters "Name=isDefault,Values=true" --query "Vpcs[0].VpcId" --output text)
           echo "DEFAULT_VPC_ID=$DEFAULT_VPC_ID" >> $GITHUB_ENV
           
           # Check for private subnet A
-          SUBNET_A_COUNT=$(aws ec2 describe-subnets --filters "Name=tag:Name,Values=cerberes-private-subnet-a" "Name=vpc-id,Values=$DEFAULT_VPC_ID" --query "length(Subnets)" --output text)
-          if [ "$SUBNET_A_COUNT" -gt "0" ]; then
-            echo "✅ Found existing private subnet A"
-            SUBNET_A_ID=$(aws ec2 describe-subnets --filters "Name=tag:Name,Values=cerberes-private-subnet-a" "Name=vpc-id,Values=$DEFAULT_VPC_ID" --query "Subnets[0].SubnetId" --output text)
-            echo "SUBNET_A_ID=$SUBNET_A_ID" >> $GITHUB_ENV
-            echo "SUBNET_A_EXISTS=true" >> $GITHUB_ENV
+          SUBNET_A_ID=$(aws ec2 describe-subnets --filters "Name=tag:Name,Values=cerberes-private-subnet-a" "Name=vpc-id,Values=$DEFAULT_VPC_ID" --query "Subnets[0].SubnetId" --output text || echo "")
+          if [ "$SUBNET_A_ID" != "" ]; then
+            echo "✅ Found existing private subnet A: $SUBNET_A_ID"
           else
             echo "🆕 No existing private subnet A found"
-            echo "SUBNET_A_EXISTS=false" >> $GITHUB_ENV
           fi
+          echo "SUBNET_A_ID=$SUBNET_A_ID" >> $GITHUB_ENV
           
           # Check for private subnet B
-          SUBNET_B_COUNT=$(aws ec2 describe-subnets --filters "Name=tag:Name,Values=cerberes-private-subnet-b" "Name=vpc-id,Values=$DEFAULT_VPC_ID" --query "length(Subnets)" --output text)
-          if [ "$SUBNET_B_COUNT" -gt "0" ]; then
-            echo "✅ Found existing private subnet B"
-            SUBNET_B_ID=$(aws ec2 describe-subnets --filters "Name=tag:Name,Values=cerberes-private-subnet-b" "Name=vpc-id,Values=$DEFAULT_VPC_ID" --query "Subnets[0].SubnetId" --output text)
-            echo "SUBNET_B_ID=$SUBNET_B_ID" >> $GITHUB_ENV
-            echo "SUBNET_B_EXISTS=true" >> $GITHUB_ENV
+          SUBNET_B_ID=$(aws ec2 describe-subnets --filters "Name=tag:Name,Values=cerberes-private-subnet-b" "Name=vpc-id,Values=$DEFAULT_VPC_ID" --query "Subnets[0].SubnetId" --output text || echo "")
+          if [ "$SUBNET_B_ID" != "" ]; then
+            echo "✅ Found existing private subnet B: $SUBNET_B_ID"
           else
             echo "🆕 No existing private subnet B found"
-            echo "SUBNET_B_EXISTS=false" >> $GITHUB_ENV
           fi
+          echo "SUBNET_B_ID=$SUBNET_B_ID" >> $GITHUB_ENV
           
           # Check for existing security group
-          CERBERES_SG_ID=$(aws ec2 describe-security-groups --filters "Name=group-name,Values=cerberes-sg" "Name=vpc-id,Values=$DEFAULT_VPC_ID" --query "SecurityGroups[0].GroupId" --output text)
-          
-          if [ "$CERBERES_SG_ID" != "None" ]; then
+          CERBERES_SG_ID=$(aws ec2 describe-security-groups --filters "Name=group-name,Values=cerberes-sg" "Name=vpc-id,Values=$DEFAULT_VPC_ID" --query "SecurityGroups[0].GroupId" --output text || echo "")
+          if [ "$CERBERES_SG_ID" != "" ]; then
             echo "✅ Found existing security group: $CERBERES_SG_ID"
-            echo "SG_EXISTS=true" >> $GITHUB_ENV
-            echo "CERBERES_SG_ID=$CERBERES_SG_ID" >> $GITHUB_ENV
           else
             echo "🆕 No existing security group found"
-            echo "SG_EXISTS=false" >> $GITHUB_ENV
           fi
+          echo "CERBERES_SG_ID=$CERBERES_SG_ID" >> $GITHUB_ENV
 
       # Create terraform.tfvars file
       - name: Create terraform.tfvars
@@ -138,41 +125,12 @@ jobs:
           ssh_key_name    = "${{ secrets.SSH_KEY_NAME }}"
           ec2_instance_type = "t2.micro"
           db_instance_class = "db.t3.micro"
+          ec2_id = "${{ env.EC2_ID }}"
+          security_group_id = "${{ env.CERBERES_SG_ID }}"
+          subnet_a_id = "${{ env.SUBNET_A_ID }}"
+          subnet_b_id = "${{ env.SUBNET_B_ID }}"
+          db_subnet_group_id = "${{ env.DB_SUBNET_GROUP_ID }}"
           EOF
-          
-          # Add security group ID if it exists
-          if [ "${{ env.SG_EXISTS }}" == "true" ]; then
-            echo "security_group_id = \"${{ env.CERBERES_SG_ID }}\"" >> terraform/terraform.tfvars
-          else
-            echo "security_group_id = \"\"" >> terraform/terraform.tfvars
-          fi
-          
-          # Add subnet existence flags
-          if [ "${{ env.SUBNET_A_EXISTS }}" == "true" ]; then
-            echo "subnet_a_exists = true" >> terraform/terraform.tfvars
-            echo "subnet_a_id = \"${{ env.SUBNET_A_ID }}\"" >> terraform/terraform.tfvars
-          else
-            echo "subnet_a_exists = false" >> terraform/terraform.tfvars
-            echo "subnet_a_id = \"\"" >> terraform/terraform.tfvars
-          fi
-          
-          if [ "${{ env.SUBNET_B_EXISTS }}" == "true" ]; then
-            echo "subnet_b_exists = true" >> terraform/terraform.tfvars
-            echo "subnet_b_id = \"${{ env.SUBNET_B_ID }}\"" >> terraform/terraform.tfvars
-          else
-            echo "subnet_b_exists = false" >> terraform/terraform.tfvars
-            echo "subnet_b_id = \"\"" >> terraform/terraform.tfvars
-          fi
-          
-          # Check if internet gateway exists in the VPC
-          IGW_COUNT=$(aws ec2 describe-internet-gateways --filters "Name=attachment.vpc-id,Values=$DEFAULT_VPC_ID" --query "length(InternetGateways)" --output text)
-          if [ "$IGW_COUNT" -gt "0" ]; then
-            echo "✅ Found existing internet gateway"
-            echo "create_igw = false" >> terraform/terraform.tfvars
-          else
-            echo "🆕 No existing internet gateway found"
-            echo "create_igw = true" >> terraform/terraform.tfvars
-          fi
           
           echo "🔑 Created terraform.tfvars with configuration"
 
@@ -198,7 +156,7 @@ jobs:
         if: steps.terraform-apply.outcome == 'success'
         run: |
           # Get EC2 instance information
-          if [ "${{ env.EC2_EXISTS }}" == "true" ]; then
+          if [ "${{ env.EC2_ID }}" != "" ]; then
             # Use the existing EC2 instance ID
             EC2_ID="${{ env.EC2_ID }}"
           else

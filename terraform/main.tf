@@ -49,16 +49,9 @@ locals {
   # Get the public subnet ID to use for EC2
   public_subnet_id = length(local.public_subnet_ids) > 0 ? local.public_subnet_ids[0] : null
   
-  # Get the private subnet ID to use for RDS
-  private_subnet_id = length(local.private_subnet_ids) > 0 ? local.private_subnet_ids[0] : null
-  
   # Internet gateway ID - try to use existing one first, then our created one if it exists
   igw_id = try(data.aws_internet_gateway.existing.id, length(aws_internet_gateway.igw) > 0 ? aws_internet_gateway.igw[0].id : null)
   
-  # VPC CIDR information
-  vpc_cidr = data.aws_vpc.default.cidr_block
-  # Extract first two octets from VPC CIDR
-  vpc_prefix = join(".", slice(split(".", local.vpc_cidr), 0, 2))
 }
 
 # Get public subnets in the default VPC
