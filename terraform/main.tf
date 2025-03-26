@@ -35,11 +35,6 @@ data "aws_vpc" "default" {
   default = true
 }
 
-# Get VPC CIDR block
-data "aws_vpc" "selected" {
-  id = data.aws_vpc.default.id
-}
-
 # Local variables for VPC and subnet selection
 locals {
   # Use the default VPC ID
@@ -54,25 +49,15 @@ locals {
   # Get the public subnet ID to use for EC2
   public_subnet_id = length(local.public_subnet_ids) > 0 ? local.public_subnet_ids[0] : null
   
-  # Create subnets in two availability zones for RDS (minimum required)
-  # Check for existing subnets with the same name
-  existing_private_subnets = data.aws_subnets.existing_private_subnets.ids
-  existing_subnet_count = length(data.aws_subnets.existing_private_subnets.ids)
-  
-  # Use the variables from CD workflow to determine if subnets exist
-  create_subnet_a = !var.subnet_a_exists
-  create_subnet_b = !var.subnet_b_exists
-  
-  # IDs to use for the subnets (either existing or new)
-  subnet_a_id = var.subnet_a_exists ? var.subnet_a_id : (length(aws_subnet.private_subnet_a) > 0 ? aws_subnet.private_subnet_a[0].id : null)
-  subnet_b_id = var.subnet_b_exists ? var.subnet_b_id : (length(aws_subnet.private_subnet_b) > 0 ? aws_subnet.private_subnet_b[0].id : null)
+  # Get the private subnet ID to use for RDS
+  private_subnet_id = length(local.private_subnet_ids) > 0 ? local.private_subnet_ids[0] : null
   
   # Internet gateway ID - try to use existing one first, then our created one if it exists
   igw_id = try(data.aws_internet_gateway.existing.id, length(aws_internet_gateway.igw) > 0 ? aws_internet_gateway.igw[0].id : null)
   
   # VPC CIDR information
-  vpc_cidr = data.aws_vpc.selected.cidr_block
-  # Extract first two octets from VPC CIDR (e.g., "172.31" from "172.31.0.0/16")
+  vpc_cidr = data.aws_vpc.default.cidr_block
+  # Extract first two octets from VPC CIDR
   vpc_prefix = join(".", slice(split(".", local.vpc_cidr), 0, 2))
 }
 
@@ -135,44 +120,6 @@ output "public_subnet_id" {
 output "private_subnet_ids" {
   value       = local.private_subnet_ids
   description = "The IDs of the private subnets"
-}
-
-# Create subnets in two availability zones for RDS (minimum required)
-# Check for existing subnets with the same name
-data "aws_subnets" "existing_private_subnets" {
-  filter {
-    name   = "vpc-id"
-    values = [local.vpc_id]
-  }
-  
-  filter {
-    name   = "tag:Name"
-    values = ["${var.app_name}-private-subnet-a", "${var.app_name}-private-subnet-b"]
-  }
-}
-
-resource "aws_subnet" "private_subnet_a" {
-  count             = local.create_subnet_a ? 1 : 0
-  vpc_id            = local.vpc_id
-  # Use CIDR blocks based on VPC CIDR
-  cidr_block        = "${local.vpc_prefix}.101.0/24"
-  availability_zone = "${var.aws_region}a"
-  
-  tags = {
-    Name = "${var.app_name}-private-subnet-a"
-  }
-}
-
-resource "aws_subnet" "private_subnet_b" {
-  count             = local.create_subnet_b ? 1 : 0
-  vpc_id            = local.vpc_id
-  # Use CIDR blocks based on VPC CIDR
-  cidr_block        = "${local.vpc_prefix}.102.0/24"
-  availability_zone = "${var.aws_region}b"
-  
-  tags = {
-    Name = "${var.app_name}-private-subnet-b"
-  }
 }
 
 # Create an Internet Gateway only if one doesn't exist

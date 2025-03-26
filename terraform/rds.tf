@@ -1,10 +1,7 @@
 # DB Subnet Group for RDS - minimum required configuration
 resource "aws_db_subnet_group" "db_subnet_group" {
   name       = "${var.app_name}-db-subnet-group"
-  subnet_ids = compact([
-    local.subnet_a_id,
-    local.subnet_b_id
-  ])
+  subnet_ids = slice(local.private_subnet_ids, 0, min(2, length(local.private_subnet_ids)))
 
   tags = {
     Name = "${var.app_name}-db-subnet-group"
