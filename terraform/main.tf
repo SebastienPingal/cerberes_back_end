@@ -152,15 +152,9 @@ resource "aws_route_table" "private_rt" {
   }
 }
 
-# Associate the route table with the private subnets
-resource "aws_route_table_association" "private_rta_a" {
-  count          = length(aws_subnet.private_subnet_a)
-  subnet_id      = aws_subnet.private_subnet_a[count.index].id
-  route_table_id = aws_route_table.private_rt.id
-}
-
-resource "aws_route_table_association" "private_rta_b" {
-  count          = length(aws_subnet.private_subnet_b)
-  subnet_id      = aws_subnet.private_subnet_b[count.index].id
+# Associate the route table with private subnets
+resource "aws_route_table_association" "private_rta" {
+  count          = length(local.private_subnet_ids)
+  subnet_id      = local.private_subnet_ids[count.index]
   route_table_id = aws_route_table.private_rt.id
 }
