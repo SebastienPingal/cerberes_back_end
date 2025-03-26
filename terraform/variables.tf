@@ -45,36 +45,6 @@ variable "security_group_id" {
   default     = ""
 }
 
-variable "existing_ec2_sg_id" {
-  description = "The ID of an existing EC2 security group to use (optional)"
-  type        = string
-  default     = ""
-}
-
-variable "subnet_a_exists" {
-  description = "Whether private subnet A already exists"
-  type        = bool
-  default     = false
-}
-
-variable "subnet_a_id" {
-  description = "The ID of an existing private subnet A (optional)"
-  type        = string
-  default     = ""
-}
-
-variable "subnet_b_exists" {
-  description = "Whether private subnet B already exists"
-  type        = bool
-  default     = false
-}
-
-variable "subnet_b_id" {
-  description = "The ID of an existing private subnet B (optional)"
-  type        = string
-  default     = ""
-}
-
 variable "create_igw" {
   description = "Whether to create an internet gateway"
   type        = bool
