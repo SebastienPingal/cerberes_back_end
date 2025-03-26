@@ -53,11 +53,8 @@ locals {
   # Get the IP of the new instance if created
   new_instance_ip = length(aws_instance.app_instance) > 0 ? aws_instance.app_instance[0].public_ip : ""
   
-  # Determine which security group to use
-  use_existing_sg = var.security_group_id == "" && var.existing_ec2_sg_id != ""
-  
   # Security group ID to use
-  sg_id = var.security_group_id != "" ? var.security_group_id : (local.use_existing_sg ? var.existing_ec2_sg_id : (length(data.aws_security_group.ec2_sg) > 0 ? data.aws_security_group.ec2_sg[0].id : ""))
+  sg_id = var.security_group_id != "" ? var.security_group_id : (length(data.aws_security_group.ec2_sg) > 0 ? data.aws_security_group.ec2_sg[0].id : "")
   
   # Get the IP to use for output
   instance_ip = local.existing_ip != "" ? local.existing_ip : local.new_instance_ip
