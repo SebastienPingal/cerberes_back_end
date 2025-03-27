@@ -29,7 +29,7 @@ data "aws_security_group" "shared_sg" {
 
 # EC2 Instance for hosting the application
 resource "aws_instance" "app_instance" {
-  count                  = var.ec2_exists ? 1 : 0
+  count                  = !var.ec2_id ? 1 : 0
   ami                    = "ami-0905a3c97561e0b69" # Ubuntu 22.04 LTS in eu-west-1
   instance_type          = var.ec2_instance_type
   key_name               = var.ssh_key_name
@@ -78,7 +78,7 @@ resource "aws_instance" "app_instance" {
 
 # Data source to get information about the existing instance if it exists
 data "aws_instance" "existing_instance" {
-  count       = var.ec2_exists ? 1 : 0
+  count       = !!var.ec2_id ? 1 : 0
   instance_id = var.ec2_id
 }
 

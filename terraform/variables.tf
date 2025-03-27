@@ -51,16 +51,10 @@ variable "create_igw" {
   default     = true
 }
 
-variable "db_subnet_group_exists" {
-  description = "Whether to use an existing DB subnet group"
-  type        = bool
-  default     = false
-}
-
-variable "ec2_exists" {
-  description = "Whether an EC2 instance already exists"
-  type        = bool
-  default     = false
+variable "db_subnet_group_id" {
+  description = "The ID of an existing DB subnet group to use (optional)"
+  type        = string
+  default     = ""
 }
 
 variable "ec2_id" {

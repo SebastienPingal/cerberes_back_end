@@ -1,13 +1,13 @@
 # Data source for existing DB subnet group
 data "aws_db_subnet_group" "existing" {
-  count = var.db_subnet_group_exists ? 1 : 0  # Only look if we're using an existing subnet group
+  count = !!var.db_subnet_group_id ? 1 : 0  # Only look if we're using an existing subnet group
   name  = "${var.app_name}-db-subnet-group"
 }
 
 # Local variables for RDS
 locals {
   # DB subnet group name - use the existing one if it exists, otherwise create new
-  db_subnet_group_name = var.db_subnet_group_exists ? data.aws_db_subnet_group.existing[0].name : "${var.app_name}-db-subnet-group"
+  db_subnet_group_name = !!var.db_subnet_group_id ? data.aws_db_subnet_group.existing[0].name : "${var.app_name}-db-subnet-group"
   
   # Check if DB instance exists
   db_instance_exists = length(data.aws_db_instances.existing.instance_identifiers) > 0
