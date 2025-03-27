@@ -91,14 +91,14 @@ jobs:
           SUBNET_AZA_ID=$(aws ec2 describe-subnets --region ${{ secrets.AWS_REGION }} --filters "Name=vpc-id,Values=$DEFAULT_VPC_ID" "Name=availability-zone,Values=${{ secrets.AWS_REGION }}a" --query "Subnets[0].SubnetId" --output text || echo "")
           SUBNET_AZB_ID=$(aws ec2 describe-subnets --region ${{ secrets.AWS_REGION }} --filters "Name=vpc-id,Values=$DEFAULT_VPC_ID" "Name=availability-zone,Values=${{ secrets.AWS_REGION }}b" --query "Subnets[0].SubnetId" --output text || echo "")
           if [ "$SUBNET_AZA_ID" != "" ]; then
-            echo "✅ Found existing private subnet in AZ: $SUBNET_AZA_ID"
+            echo "✅ Found existing private subnet in AZ A: $SUBNET_AZA_ID"
           else
-            echo "🆕 No existing private subnet in AZ: $SUBNET_AZA_ID"
+            echo "🆕 No existing private subnet in AZ A: $SUBNET_AZA_ID"
           fi
           if [ "$SUBNET_AZB_ID" != "" ]; then
-            echo "✅ Found existing private subnet in AZ: $SUBNET_AZB_ID"
+            echo "✅ Found existing private subnet in AZ B: $SUBNET_AZB_ID"
           else
-            echo "🆕 No existing private subnet in AZ: $SUBNET_AZB_ID"
+            echo "🆕 No existing private subnet in AZ B: $SUBNET_AZB_ID"
           fi
           echo "SUBNET_AZA_ID=$SUBNET_AZA_ID" >> $GITHUB_ENV
           echo "SUBNET_AZB_ID=$SUBNET_AZB_ID" >> $GITHUB_ENV
@@ -110,6 +110,7 @@ jobs:
             echo "✅ Subnets have sufficient capacity"
           else
             echo "❌ Subnets do not have sufficient capacity"
+          fi
           
           # Check for existing security group
           CERBERES_SG_ID=$(aws ec2 describe-security-groups --filters "Name=group-name,Values=cerberes-sg" "Name=vpc-id,Values=$DEFAULT_VPC_ID" --query "SecurityGroups[0].GroupId" --output text || echo "")
