@@ -75,7 +75,7 @@ jobs:
           echo "RDS_ENDPOINT=$RDS_ENDPOINT" >> $GITHUB_ENV
           
           # Check for existing DB subnet group
-          DB_SUBNET_GROUP_ID=$(aws rds describe-db-subnet-groups --db-subnet-group-name cerberes-db-subnet-group --query "DBSubnetGroups[0].DBSubnetGroupName" --output text || echo "")
+          DB_SUBNET_GROUP_ID=$(aws rds describe-db-subnet-groups --db-subnet-group-name cerberes-db-subnet-group --availability-zone ${{ secrets.AWS_REGION }}a --query "DBSubnetGroups[0].DBSubnetGroupName" --output text || echo "")
           if [ "$DB_SUBNET_GROUP_ID" != "" ]; then
             echo "✅ Found existing DB subnet group: $DB_SUBNET_GROUP_ID"
           else
@@ -87,23 +87,14 @@ jobs:
           DEFAULT_VPC_ID=$(aws ec2 describe-vpcs --filters "Name=isDefault,Values=true" --query "Vpcs[0].VpcId" --output text)
           echo "DEFAULT_VPC_ID=$DEFAULT_VPC_ID" >> $GITHUB_ENV
           
-          # # Check for private subnet A
-          # SUBNET_A_ID=$(aws ec2 describe-subnets --filters "Name=tag:Name,Values=cerberes-private-subnet-a" "Name=vpc-id,Values=$DEFAULT_VPC_ID" --query "Subnets[0].SubnetId" --output text || echo "")
-          # if [ "$SUBNET_A_ID" != "" ]; then
-          #   echo "✅ Found existing private subnet A: $SUBNET_A_ID"
-          # else
-          #   echo "🆕 No existing private subnet A found"
-          # fi
-          # echo "SUBNET_A_ID=$SUBNET_A_ID" >> $GITHUB_ENV
-          
-          # # Check for private subnet B
-          # SUBNET_B_ID=$(aws ec2 describe-subnets --filters "Name=tag:Name,Values=cerberes-private-subnet-b" "Name=vpc-id,Values=$DEFAULT_VPC_ID" --query "Subnets[0].SubnetId" --output text || echo "")
-          # if [ "$SUBNET_B_ID" != "" ]; then
-          #   echo "✅ Found existing private subnet B: $SUBNET_B_ID"
-          # else
-          #   echo "🆕 No existing private subnet B found"
-          # fi
-          # echo "SUBNET_B_ID=$SUBNET_B_ID" >> $GITHUB_ENV
+          # Check for subnet in specific AZ
+          SUBNET_AZ_ID=$(aws ec2 describe-subnets --region ${{ secrets.AWS_REGION }} --filters "Name=vpc-id,Values=$DEFAULT_VPC_ID" "Name=availability-zone,Values=${{ secrets.AWS_REGION }}a" --query "Subnets[0].SubnetId" --output text || echo "")
+          if [ "$SUBNET_AZ_ID" != "" ]; then
+            echo "✅ Found existing private subnet in AZ: $SUBNET_AZ_ID"
+          else
+            echo "🆕 No existing private subnet in AZ found"
+          fi
+          echo "SUBNET_AZ_ID=$SUBNET_AZ_ID" >> $GITHUB_ENV
           
           # Check for existing security group
           CERBERES_SG_ID=$(aws ec2 describe-security-groups --filters "Name=group-name,Values=cerberes-sg" "Name=vpc-id,Values=$DEFAULT_VPC_ID" --query "SecurityGroups[0].GroupId" --output text || echo "")
@@ -128,6 +119,7 @@ jobs:
           ec2_id = "${{ env.EC2_ID }}"
           security_group_id = "${{ env.CERBERES_SG_ID }}"
           db_subnet_group_id = "${{ env.DB_SUBNET_GROUP_ID }}"
+          subnet_id = "${{ env.SUBNET_AZ_ID }}"
           EOT
           
           echo "🔑 Created terraform.tfvars with configuration"

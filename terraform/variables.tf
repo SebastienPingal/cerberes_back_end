@@ -56,3 +56,9 @@ variable "ec2_id" {
   type        = string
   default     = ""
 }
+
+variable "subnet_id" {
+  description = "The ID of the existing subnet"
+  type        = string
+  default     = ""
+}
