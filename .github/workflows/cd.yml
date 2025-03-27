@@ -104,8 +104,8 @@ jobs:
           echo "SUBNET_AZB_ID=$SUBNET_AZB_ID" >> $GITHUB_ENV
 
           # check for subnets sufficient capacity for t3.micro
-          SUBNET_AZA_CAPACITY=$(aws ec2 describe-subnets --region ${{ secrets.AWS_REGION }} --filters "Name=vpc-id,Values=$DEFAULT_VPC_ID" "Name=availability-zone,Values=${{ secrets.AWS_REGION }}a" --query "Subnets[0].AvailableIpAddressCount" --output text || echo "")
-          SUBNET_AZB_CAPACITY=$(aws ec2 describe-subnets --region ${{ secrets.AWS_REGION }} --filters "Name=vpc-id,Values=$DEFAULT_VPC_ID" "Name=availability-zone,Values=${{ secrets.AWS_REGION }}b" --query "Subnets[0].AvailableIpAddressCount" --output text || echo "")
+          SUBNET_AZA_CAPACITY=$(aws ec2 describe-subnets --region ${{ secrets.AWS_REGION }} --filters "Name=vpc-id,Values=$DEFAULT_VPC_ID" "Name=availability-zone,Values=${{ secrets.AWS_REGION }}a" --query "Subnets[0].AvailableIpAddressCount" --output text || echo "0")
+          SUBNET_AZB_CAPACITY=$(aws ec2 describe-subnets --region ${{ secrets.AWS_REGION }} --filters "Name=vpc-id,Values=$DEFAULT_VPC_ID" "Name=availability-zone,Values=${{ secrets.AWS_REGION }}b" --query "Subnets[0].AvailableIpAddressCount" --output text || echo "0")
           if [ "$SUBNET_AZA_CAPACITY" -ge 10 ] && [ "$SUBNET_AZB_CAPACITY" -ge 10 ]; then
             echo "✅ Subnets have sufficient capacity"
           else
