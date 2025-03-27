@@ -85,5 +85,5 @@ data "aws_instance" "existing_instance" {
 # Output the public IP - using the local variable for safety
 output "public_ip" {
   description = "Public IP address of the EC2 instance"
-  value       = data.aws_instance.existing_instance[0].public_ip
+  value       = var.ec2_id != "" ? data.aws_instance.existing_instance[0].public_ip : aws_instance.app_instance[0].public_ip
 }
