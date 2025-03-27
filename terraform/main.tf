@@ -118,7 +118,7 @@ output "private_subnet_ids" {
 # Create an Internet Gateway only if one doesn't exist
 resource "aws_internet_gateway" "igw" {
   # Only create if no internet gateway is attached to the VPC
-  count  = igw_id != "" ? 0 : 1
+  count  = local.igw_id != "" ? 0 : 1
   vpc_id = local.vpc_id
 
   tags = {
