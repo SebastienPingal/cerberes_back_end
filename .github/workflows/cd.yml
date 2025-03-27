@@ -138,8 +138,8 @@ jobs:
           db_subnet_group_id = "${{ env.DB_SUBNET_GROUP_ID }}"
           subnet_az_a_id = "${{ env.SUBNET_AZA_ID }}"
           subnet_az_b_id = "${{ env.SUBNET_AZB_ID }}"
-          subnet_az_a_capacity = "${{ env.SUBNET_AZA_CAPACITY }}"
-          subnet_az_b_capacity = "${{ env.SUBNET_AZB_CAPACITY }}"
+          subnet_az_a_capacity = ${{ env.SUBNET_AZA_CAPACITY }}
+          subnet_az_b_capacity = ${{ env.SUBNET_AZB_CAPACITY }}
           EOT
           
           echo "🔑 Created terraform.tfvars with configuration"
