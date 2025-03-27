@@ -117,7 +117,7 @@ jobs:
       # Create terraform.tfvars file
       - name: Create terraform.tfvars
         run: |
-          cat > terraform/terraform.tfvars << 'EOF'
+          cat > terraform/terraform.tfvars << EOT
           aws_region      = "${{ secrets.AWS_REGION }}"
           app_name        = "cerberes"
           db_username     = "${{ secrets.DB_USERNAME }}"
@@ -130,7 +130,7 @@ jobs:
           subnet_a_id = "${{ env.SUBNET_A_ID }}"
           subnet_b_id = "${{ env.SUBNET_B_ID }}"
           db_subnet_group_id = "${{ env.DB_SUBNET_GROUP_ID }}"
-          EOF
+          EOT
           
           echo "🔑 Created terraform.tfvars with configuration"
 
