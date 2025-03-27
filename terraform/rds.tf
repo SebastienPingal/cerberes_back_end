@@ -30,7 +30,7 @@ resource "aws_db_instance" "postgres" {
   vpc_security_group_ids  = [var.security_group_id]
   db_subnet_group_name    = local.db_subnet_group_name
   skip_final_snapshot     = true
-  publicly_accessible     = true
+  publicly_accessible     = false
   multi_az                = false
   backup_retention_period = 7
   backup_window           = "03:00-04:00"

@@ -129,6 +129,15 @@ jobs:
           fi
           echo "CERBERES_SG_ID=$CERBERES_SG_ID" >> $GITHUB_ENV
 
+          # check for the nat instance
+          NAT_INSTANCE_ID=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=cerberes-nat" "Name=instance-state-name,Values=running,pending" --query "Reservations[0].Instances[0].InstanceId" --output text || echo "")
+          if [ "$NAT_INSTANCE_ID" != "" ]; then
+            echo "✅ Found existing NAT instance: $NAT_INSTANCE_ID"
+          else
+            echo "🆕 No existing NAT instance found"
+          fi
+          echo "NAT_INSTANCE_ID=$NAT_INSTANCE_ID" >> $GITHUB_ENV
+
       # Create terraform.tfvars file
       - name: Create terraform.tfvars
         run: |
@@ -148,6 +157,7 @@ jobs:
           subnet_az_b_id = "${{ env.SUBNET_AZB_ID }}"
           subnet_az_a_capacity = ${{ env.SUBNET_AZA_CAPACITY }}
           subnet_az_b_capacity = ${{ env.SUBNET_AZB_CAPACITY }}
+          nat_instance_id = "${{ env.NAT_INSTANCE_ID }}"
           EOT
           
           echo "🔑 Created terraform.tfvars with configuration"

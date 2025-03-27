@@ -87,3 +87,8 @@ variable "subnet_az_b_capacity" {
   default     = 0
 }
 
+variable "nat_instance_id" {
+  description = "The ID of the existing NAT instance"
+  type        = string
+  default     = ""
+}

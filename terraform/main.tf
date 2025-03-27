@@ -105,8 +105,16 @@ resource "aws_internet_gateway" "igw" {
   }
 }
 
+# Attach Internet Gateway to VPC if it doesn't exist
+resource "aws_internet_gateway_attachment" "igw_attachment" {
+  count               = length(data.aws_internet_gateway.existing) > 0 ? 0 : 1
+  internet_gateway_id = aws_internet_gateway.igw[0].id
+  vpc_id              = local.vpc_id
+}
+
 # Create a route table for public subnets
 resource "aws_route_table" "public_rt" {
+  count  = length(data.aws_internet_gateway.existing) > 0 ? 0 : 1
   vpc_id = local.vpc_id
 
   route {
@@ -117,6 +125,8 @@ resource "aws_route_table" "public_rt" {
   tags = {
     Name = "${var.app_name}-public-rt"
   }
+
+  depends_on = [aws_internet_gateway_attachment]
 }
 
 # Associate the route table with public subnets
@@ -124,4 +134,73 @@ resource "aws_route_table_association" "public_rta" {
   count          = length(local.public_subnet_ids)
   subnet_id      = local.public_subnet_ids[count.index]
   route_table_id = aws_route_table.public_rt.id
+}
+
+# Create a NAT Instance for private subnet access
+resource "aws_instance" "nat_instance" {
+  count             = var.nat_instance_id == "" || var.nat_instance_id == "None" ? 1 : 0
+  ami               = "ami-0905a3c97561e0b69" # Ubuntu 22.04 LTS
+  instance_type     = "t2.micro"              # Free tier eligible
+  subnet_id         = local.public_subnet_id  # Place in public subnet
+  source_dest_check = false                   # Required for NAT instance
+
+  vpc_security_group_ids = [aws_security_group.nat_sg.id]
+
+  tags = {
+    Name = "${var.app_name}-nat"
+  }
+
+  user_data = <<-EOF
+    #!/bin/bash
+    echo "Setting up NAT instance..."
+    sysctl -w net.ipv4.ip_forward=1
+    iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
+    echo "NAT instance setup complete!"
+  EOF
+}
+
+# Security group for NAT instance
+resource "aws_security_group" "nat_sg" {
+  name        = "${var.app_name}-nat-sg"
+  description = "Security group for NAT instance"
+  vpc_id      = local.vpc_id
+
+  ingress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "${var.app_name}-nat-sg"
+  }
+}
+
+# Create a route table for private subnets
+resource "aws_route_table" "private_rt" {
+  vpc_id = local.vpc_id
+
+  route {
+    cidr_block  = "0.0.0.0/0"
+    instance_id = aws_instance.nat_instance[0].id
+  }
+
+  tags = {
+    Name = "${var.app_name}-private-rt"
+  }
+}
+
+# Associate the route table with private subnets
+resource "aws_route_table_association" "private_rta" {
+  count          = length(local.public_subnet_ids)
+  subnet_id      = local.public_subnet_ids[count.index]
+  route_table_id = aws_route_table.private_rt.id
 }
