@@ -82,34 +82,40 @@ jobs:
             echo "🆕 No existing DB subnet group found"
           fi
           echo "DB_SUBNET_GROUP_ID=$DB_SUBNET_GROUP_ID" >> $GITHUB_ENV
+
+          # if there is a subnet group, check that he is correctly configured for RDS
+          if [ "$DB_SUBNET_GROUP_ID" != "" ]; then
+            echo "🔍 Checking DB subnet group configuration..."
+            aws rds describe-db-subnet-groups --db-subnet-group-name $DB_SUBNET_GROUP_ID --query "DBSubnetGroups[0].Subnets" --output text
+          fi
           
           # Check for existing subnets
           DEFAULT_VPC_ID=$(aws ec2 describe-vpcs --filters "Name=isDefault,Values=true" --query "Vpcs[0].VpcId" --output text)
           echo "DEFAULT_VPC_ID=$DEFAULT_VPC_ID" >> $GITHUB_ENV
           
-          # Check for subnet in different AZs
-          SUBNET_AZA_ID=$(aws ec2 describe-subnets --region ${{ secrets.AWS_REGION }} --filters "Name=vpc-id,Values=$DEFAULT_VPC_ID" "Name=availability-zone,Values=${{ secrets.AWS_REGION }}a" --query "Subnets[0].SubnetId" --output text || echo "")
-          SUBNET_AZB_ID=$(aws ec2 describe-subnets --region ${{ secrets.AWS_REGION }} --filters "Name=vpc-id,Values=$DEFAULT_VPC_ID" "Name=availability-zone,Values=${{ secrets.AWS_REGION }}b" --query "Subnets[0].SubnetId" --output text || echo "")
+          # Check for public subnets in different AZs
+          SUBNET_AZA_ID=$(aws ec2 describe-subnets --region ${{ secrets.AWS_REGION }} --filters "Name=vpc-id,Values=$DEFAULT_VPC_ID" "Name=availability-zone,Values=${{ secrets.AWS_REGION }}a" "Name=map-public-ip-on-launch,Values=true" --query "Subnets[0].SubnetId" --output text || echo "")
+          SUBNET_AZB_ID=$(aws ec2 describe-subnets --region ${{ secrets.AWS_REGION }} --filters "Name=vpc-id,Values=$DEFAULT_VPC_ID" "Name=availability-zone,Values=${{ secrets.AWS_REGION }}b" "Name=map-public-ip-on-launch,Values=true" --query "Subnets[0].SubnetId" --output text || echo "")
           if [ "$SUBNET_AZA_ID" != "" ]; then
-            echo "✅ Found existing private subnet in AZ A: $SUBNET_AZA_ID"
+            echo "✅ Found existing public subnet in AZ A: $SUBNET_AZA_ID"
           else
-            echo "🆕 No existing private subnet in AZ A: $SUBNET_AZA_ID"
+            echo "🆕 No existing public subnet in AZ A"
           fi
           if [ "$SUBNET_AZB_ID" != "" ]; then
-            echo "✅ Found existing private subnet in AZ B: $SUBNET_AZB_ID"
+            echo "✅ Found existing public subnet in AZ B: $SUBNET_AZB_ID"
           else
-            echo "🆕 No existing private subnet in AZ B: $SUBNET_AZB_ID"
+            echo "🆕 No existing public subnet in AZ B"
           fi
           echo "SUBNET_AZA_ID=$SUBNET_AZA_ID" >> $GITHUB_ENV
           echo "SUBNET_AZB_ID=$SUBNET_AZB_ID" >> $GITHUB_ENV
 
           # check for subnets sufficient capacity for t3.micro
-          SUBNET_AZA_CAPACITY=$(aws ec2 describe-subnets --region ${{ secrets.AWS_REGION }} --filters "Name=vpc-id,Values=$DEFAULT_VPC_ID" "Name=availability-zone,Values=${{ secrets.AWS_REGION }}a" --query "Subnets[0].AvailableIpAddressCount" --output text || echo "0")
-          SUBNET_AZB_CAPACITY=$(aws ec2 describe-subnets --region ${{ secrets.AWS_REGION }} --filters "Name=vpc-id,Values=$DEFAULT_VPC_ID" "Name=availability-zone,Values=${{ secrets.AWS_REGION }}b" --query "Subnets[0].AvailableIpAddressCount" --output text || echo "0")
+          SUBNET_AZA_CAPACITY=$(aws ec2 describe-subnets --region ${{ secrets.AWS_REGION }} --filters "Name=vpc-id,Values=$DEFAULT_VPC_ID" "Name=availability-zone,Values=${{ secrets.AWS_REGION }}a" "Name=map-public-ip-on-launch,Values=true" --query "Subnets[0].AvailableIpAddressCount" --output text || echo "0")
+          SUBNET_AZB_CAPACITY=$(aws ec2 describe-subnets --region ${{ secrets.AWS_REGION }} --filters "Name=vpc-id,Values=$DEFAULT_VPC_ID" "Name=availability-zone,Values=${{ secrets.AWS_REGION }}b" "Name=map-public-ip-on-launch,Values=true" --query "Subnets[0].AvailableIpAddressCount" --output text || echo "0")
           if [ "$SUBNET_AZA_CAPACITY" -ge 10 ] && [ "$SUBNET_AZB_CAPACITY" -ge 10 ]; then
-            echo "✅ Subnets have sufficient capacity"
+            echo "✅ Public subnets have sufficient capacity"
           else
-            echo "❌ Subnets do not have sufficient capacity"
+            echo "❌ Public subnets do not have sufficient capacity"
           fi
           echo "SUBNET_AZA_CAPACITY=$SUBNET_AZA_CAPACITY" >> $GITHUB_ENV
           echo "SUBNET_AZB_CAPACITY=$SUBNET_AZB_CAPACITY" >> $GITHUB_ENV

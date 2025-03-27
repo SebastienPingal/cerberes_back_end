@@ -43,10 +43,7 @@ locals {
   # Get public subnets in the default VPC
   public_subnet_ids = length(data.aws_subnets.public.ids) > 0 ? data.aws_subnets.public.ids : []
 
-  # Get private subnets in the default VPC, or use public subnets if no private subnets exist
-  private_subnet_ids = length(data.aws_subnets.private.ids) > 0 ? data.aws_subnets.private.ids : local.public_subnet_ids
-
-  # Get the public subnet ID to use for EC2
+  # Use public subnet ID for EC2
   public_subnet_id = length(local.public_subnet_ids) > 0 ? local.public_subnet_ids[0] : null
 }
 
@@ -60,19 +57,6 @@ data "aws_subnets" "public" {
   filter {
     name   = "map-public-ip-on-launch"
     values = ["true"]
-  }
-}
-
-# Get private subnets in the default VPC
-data "aws_subnets" "private" {
-  filter {
-    name   = "vpc-id"
-    values = [local.vpc_id]
-  }
-
-  filter {
-    name   = "map-public-ip-on-launch"
-    values = ["false"]
   }
 }
 
@@ -105,12 +89,6 @@ output "public_subnet_id" {
   description = "The ID of the public subnet"
 }
 
-# Output the private subnet IDs
-output "private_subnet_ids" {
-  value       = local.private_subnet_ids
-  description = "The IDs of the private subnets"
-}
-
 # Create an Internet Gateway only if one doesn't exist
 resource "aws_internet_gateway" "igw" {
   # Only create if no internet gateway is attached to the VPC
@@ -127,8 +105,8 @@ resource "aws_internet_gateway" "igw" {
   }
 }
 
-# Create a route table for the private subnets
-resource "aws_route_table" "private_rt" {
+# Create a route table for public subnets
+resource "aws_route_table" "public_rt" {
   vpc_id = local.vpc_id
 
   route {
@@ -137,13 +115,13 @@ resource "aws_route_table" "private_rt" {
   }
 
   tags = {
-    Name = "${var.app_name}-private-rt"
+    Name = "${var.app_name}-public-rt"
   }
 }
 
-# Associate the route table with private subnets
-resource "aws_route_table_association" "private_rta" {
-  count          = length(local.private_subnet_ids)
-  subnet_id      = local.private_subnet_ids[count.index]
-  route_table_id = aws_route_table.private_rt.id
+# Associate the route table with public subnets
+resource "aws_route_table_association" "public_rta" {
+  count          = length(local.public_subnet_ids)
+  subnet_id      = local.public_subnet_ids[count.index]
+  route_table_id = aws_route_table.public_rt.id
 }
