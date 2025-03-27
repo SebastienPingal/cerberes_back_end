@@ -189,8 +189,8 @@ resource "aws_route_table" "private_rt" {
   vpc_id = local.vpc_id
 
   route {
-    cidr_block  = "0.0.0.0/0"
-    instance_id = aws_instance.nat_instance[0].id
+    cidr_block           = "0.0.0.0/0"
+    network_interface_id = aws_instance.nat_instance[0].primary_network_interface_id
   }
 
   tags = {
