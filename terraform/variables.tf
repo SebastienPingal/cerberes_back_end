@@ -81,3 +81,9 @@ variable "subnet_az_a_capacity" {
   default     = 0
 }
 
+variable "subnet_az_b_capacity" {
+  description = "The capacity of the existing subnet in AZ B"
+  type        = number
+  default     = 0
+}
+
