@@ -87,14 +87,29 @@ jobs:
           DEFAULT_VPC_ID=$(aws ec2 describe-vpcs --filters "Name=isDefault,Values=true" --query "Vpcs[0].VpcId" --output text)
           echo "DEFAULT_VPC_ID=$DEFAULT_VPC_ID" >> $GITHUB_ENV
           
-          # Check for subnet in specific AZ
-          SUBNET_AZ_ID=$(aws ec2 describe-subnets --region ${{ secrets.AWS_REGION }} --filters "Name=vpc-id,Values=$DEFAULT_VPC_ID" "Name=availability-zone,Values=${{ secrets.AWS_REGION }}a" --query "Subnets[0].SubnetId" --output text || echo "")
-          if [ "$SUBNET_AZ_ID" != "" ]; then
-            echo "✅ Found existing private subnet in AZ: $SUBNET_AZ_ID"
+          # Check for subnet in different AZs
+          SUBNET_AZA_ID=$(aws ec2 describe-subnets --region ${{ secrets.AWS_REGION }} --filters "Name=vpc-id,Values=$DEFAULT_VPC_ID" "Name=availability-zone,Values=${{ secrets.AWS_REGION }}a" --query "Subnets[0].SubnetId" --output text || echo "")
+          SUBNET_AZB_ID=$(aws ec2 describe-subnets --region ${{ secrets.AWS_REGION }} --filters "Name=vpc-id,Values=$DEFAULT_VPC_ID" "Name=availability-zone,Values=${{ secrets.AWS_REGION }}b" --query "Subnets[0].SubnetId" --output text || echo "")
+          if [ "$SUBNET_AZA_ID" != "" ]; then
+            echo "✅ Found existing private subnet in AZ: $SUBNET_AZA_ID"
           else
-            echo "🆕 No existing private subnet in AZ found"
+            echo "🆕 No existing private subnet in AZ: $SUBNET_AZA_ID"
           fi
-          echo "SUBNET_AZ_ID=$SUBNET_AZ_ID" >> $GITHUB_ENV
+          if [ "$SUBNET_AZB_ID" != "" ]; then
+            echo "✅ Found existing private subnet in AZ: $SUBNET_AZB_ID"
+          else
+            echo "🆕 No existing private subnet in AZ: $SUBNET_AZB_ID"
+          fi
+          echo "SUBNET_AZA_ID=$SUBNET_AZA_ID" >> $GITHUB_ENV
+          echo "SUBNET_AZB_ID=$SUBNET_AZB_ID" >> $GITHUB_ENV
+
+          # check for subnets sufficient capacity for t3.micro
+          SUBNET_AZA_CAPACITY=$(aws ec2 describe-subnets --region ${{ secrets.AWS_REGION }} --filters "Name=vpc-id,Values=$DEFAULT_VPC_ID" "Name=availability-zone,Values=${{ secrets.AWS_REGION }}a" --query "Subnets[0].AvailableIpAddressCount" --output text || echo "")
+          SUBNET_AZB_CAPACITY=$(aws ec2 describe-subnets --region ${{ secrets.AWS_REGION }} --filters "Name=vpc-id,Values=$DEFAULT_VPC_ID" "Name=availability-zone,Values=${{ secrets.AWS_REGION }}b" --query "Subnets[0].AvailableIpAddressCount" --output text || echo "")
+          if [ "$SUBNET_AZA_CAPACITY" -ge 10 ] && [ "$SUBNET_AZB_CAPACITY" -ge 10 ]; then
+            echo "✅ Subnets have sufficient capacity"
+          else
+            echo "❌ Subnets do not have sufficient capacity"
           
           # Check for existing security group
           CERBERES_SG_ID=$(aws ec2 describe-security-groups --filters "Name=group-name,Values=cerberes-sg" "Name=vpc-id,Values=$DEFAULT_VPC_ID" --query "SecurityGroups[0].GroupId" --output text || echo "")
@@ -120,7 +135,10 @@ jobs:
           ec2_id = "${{ env.EC2_ID }}"
           security_group_id = "${{ env.CERBERES_SG_ID }}"
           db_subnet_group_id = "${{ env.DB_SUBNET_GROUP_ID }}"
-          subnet_id = "${{ env.SUBNET_AZ_ID }}"
+          subnet_az_a_id = "${{ env.SUBNET_AZA_ID }}"
+          subnet_az_b_id = "${{ env.SUBNET_AZB_ID }}"
+          subnet_az_a_capacity = "${{ env.SUBNET_AZA_CAPACITY }}"
+          subnet_az_b_capacity = "${{ env.SUBNET_AZB_CAPACITY }}"
           EOT
           
           echo "🔑 Created terraform.tfvars with configuration"

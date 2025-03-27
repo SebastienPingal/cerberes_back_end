@@ -1,7 +1,8 @@
-# Data source for existing DB subnet group
+# Data source for existing DB subnet group with capacity check
 data "aws_db_subnet_group" "existing" {
   count = var.db_subnet_group_id != "" && var.db_subnet_group_id != "None" ? 1 : 0 # Only look if we're using an existing subnet group
   name  = "${var.app_name}-db-subnet-group"
+  subnet_ids = [var.subnet_az_a_id, var.subnet_az_b_id]
 }
 
 # Local variables for RDS

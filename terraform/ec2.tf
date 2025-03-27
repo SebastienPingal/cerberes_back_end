@@ -35,7 +35,7 @@ resource "aws_instance" "app_instance" {
   key_name               = var.ssh_key_name
   
   # Use the public subnet from main.tf
-  subnet_id = var.subnet_id
+  subnet_id = var.subnet_az_a_id
   
   # Use the security group ID from the variable if provided, otherwise use the EC2 security group
   vpc_security_group_ids = var.security_group_id != "" ? [var.security_group_id] : [data.aws_security_group.ec2_sg[0].id]

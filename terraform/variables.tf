@@ -63,8 +63,21 @@ variable "ec2_id" {
   default     = ""
 }
 
-variable "subnet_id" {
-  description = "The ID of the existing subnet"
+variable "subnet_az_a_id" {
+  description = "The ID of the existing subnet in AZ A"
   type        = string
   default     = ""
 }
+
+variable "subnet_az_b_id" {
+  description = "The ID of the existing subnet in AZ B"
+  type        = string
+  default     = ""
+}
+
+variable "subnet_az_a_capacity" {
+  description = "The capacity of the existing subnet in AZ A"
+  type        = number
+  default     = 0
+}
+
