@@ -87,23 +87,23 @@ jobs:
           DEFAULT_VPC_ID=$(aws ec2 describe-vpcs --filters "Name=isDefault,Values=true" --query "Vpcs[0].VpcId" --output text)
           echo "DEFAULT_VPC_ID=$DEFAULT_VPC_ID" >> $GITHUB_ENV
           
-          # Check for private subnet A
-          SUBNET_A_ID=$(aws ec2 describe-subnets --filters "Name=tag:Name,Values=cerberes-private-subnet-a" "Name=vpc-id,Values=$DEFAULT_VPC_ID" --query "Subnets[0].SubnetId" --output text || echo "")
-          if [ "$SUBNET_A_ID" != "" ]; then
-            echo "✅ Found existing private subnet A: $SUBNET_A_ID"
-          else
-            echo "🆕 No existing private subnet A found"
-          fi
-          echo "SUBNET_A_ID=$SUBNET_A_ID" >> $GITHUB_ENV
+          # # Check for private subnet A
+          # SUBNET_A_ID=$(aws ec2 describe-subnets --filters "Name=tag:Name,Values=cerberes-private-subnet-a" "Name=vpc-id,Values=$DEFAULT_VPC_ID" --query "Subnets[0].SubnetId" --output text || echo "")
+          # if [ "$SUBNET_A_ID" != "" ]; then
+          #   echo "✅ Found existing private subnet A: $SUBNET_A_ID"
+          # else
+          #   echo "🆕 No existing private subnet A found"
+          # fi
+          # echo "SUBNET_A_ID=$SUBNET_A_ID" >> $GITHUB_ENV
           
-          # Check for private subnet B
-          SUBNET_B_ID=$(aws ec2 describe-subnets --filters "Name=tag:Name,Values=cerberes-private-subnet-b" "Name=vpc-id,Values=$DEFAULT_VPC_ID" --query "Subnets[0].SubnetId" --output text || echo "")
-          if [ "$SUBNET_B_ID" != "" ]; then
-            echo "✅ Found existing private subnet B: $SUBNET_B_ID"
-          else
-            echo "🆕 No existing private subnet B found"
-          fi
-          echo "SUBNET_B_ID=$SUBNET_B_ID" >> $GITHUB_ENV
+          # # Check for private subnet B
+          # SUBNET_B_ID=$(aws ec2 describe-subnets --filters "Name=tag:Name,Values=cerberes-private-subnet-b" "Name=vpc-id,Values=$DEFAULT_VPC_ID" --query "Subnets[0].SubnetId" --output text || echo "")
+          # if [ "$SUBNET_B_ID" != "" ]; then
+          #   echo "✅ Found existing private subnet B: $SUBNET_B_ID"
+          # else
+          #   echo "🆕 No existing private subnet B found"
+          # fi
+          # echo "SUBNET_B_ID=$SUBNET_B_ID" >> $GITHUB_ENV
           
           # Check for existing security group
           CERBERES_SG_ID=$(aws ec2 describe-security-groups --filters "Name=group-name,Values=cerberes-sg" "Name=vpc-id,Values=$DEFAULT_VPC_ID" --query "SecurityGroups[0].GroupId" --output text || echo "")
@@ -117,7 +117,7 @@ jobs:
       # Create terraform.tfvars file
       - name: Create terraform.tfvars
         run: |
-          cat > terraform/terraform.tfvars << 'EOT'
+          cat > terraform/terraform.tfvars << EOT
           aws_region      = "${{ secrets.AWS_REGION }}"
           app_name        = "cerberes"
           db_username     = "${{ secrets.DB_USERNAME }}"
@@ -127,8 +127,6 @@ jobs:
           db_instance_class = "db.t3.micro"
           ec2_id = "${{ env.EC2_ID }}"
           security_group_id = "${{ env.CERBERES_SG_ID }}"
-          subnet_a_id = "${{ env.SUBNET_A_ID }}"
-          subnet_b_id = "${{ env.SUBNET_B_ID }}"
           db_subnet_group_id = "${{ env.DB_SUBNET_GROUP_ID }}"
           EOT
           
