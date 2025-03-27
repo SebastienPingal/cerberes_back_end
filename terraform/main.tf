@@ -6,7 +6,7 @@ terraform {
     }
   }
   required_version = ">= 1.2.0"
-  
+
   # Uncomment this block to use S3 backend for state management in production
   # backend "s3" {
   #   bucket         = "cerberes-terraform-state"
@@ -19,7 +19,7 @@ terraform {
 
 provider "aws" {
   region = var.aws_region
-  
+
   # Add default tags to all resources
   default_tags {
     tags = {
@@ -39,19 +39,19 @@ data "aws_vpc" "default" {
 locals {
   # Use the default VPC ID
   vpc_id = data.aws_vpc.default.id
-  
+
   # Get public subnets in the default VPC
   public_subnet_ids = length(data.aws_subnets.public.ids) > 0 ? data.aws_subnets.public.ids : []
-  
+
   # Get private subnets in the default VPC, or use public subnets if no private subnets exist
   private_subnet_ids = length(data.aws_subnets.private.ids) > 0 ? data.aws_subnets.private.ids : local.public_subnet_ids
-  
+
   # Get the public subnet ID to use for EC2
   public_subnet_id = length(local.public_subnet_ids) > 0 ? local.public_subnet_ids[0] : null
-  
+
   # Internet gateway ID - try to use existing one first, then our created one if it exists
   igw_id = try(data.aws_internet_gateway.existing.id, length(aws_internet_gateway.igw) > 0 ? aws_internet_gateway.igw[0].id : null)
-  
+
 }
 
 # Get public subnets in the default VPC
@@ -60,7 +60,7 @@ data "aws_subnets" "public" {
     name   = "vpc-id"
     values = [local.vpc_id]
   }
-  
+
   filter {
     name   = "map-public-ip-on-launch"
     values = ["true"]
@@ -73,7 +73,7 @@ data "aws_subnets" "private" {
     name   = "vpc-id"
     values = [local.vpc_id]
   }
-  
+
   filter {
     name   = "map-public-ip-on-launch"
     values = ["false"]
@@ -86,7 +86,7 @@ data "aws_internet_gateway" "existing" {
     name   = "attachment.vpc-id"
     values = [local.vpc_id]
   }
-  
+
   # This prevents errors if no internet gateway is found
   depends_on = [data.aws_vpc.default]
 }
@@ -118,13 +118,13 @@ output "private_subnet_ids" {
 # Create an Internet Gateway only if one doesn't exist
 resource "aws_internet_gateway" "igw" {
   # Only create if no internet gateway is attached to the VPC
-  count = var.create_igw ? 1 : 0
+  count  = igw_id != "" ? 0 : 1
   vpc_id = local.vpc_id
-  
+
   tags = {
     Name = "${var.app_name}-igw"
   }
-  
+
   # This prevents errors if the VPC already has an internet gateway
   lifecycle {
     create_before_destroy = true
@@ -134,12 +134,12 @@ resource "aws_internet_gateway" "igw" {
 # Create a route table for the private subnets
 resource "aws_route_table" "private_rt" {
   vpc_id = local.vpc_id
-  
+
   route {
     cidr_block = "0.0.0.0/0"
     gateway_id = local.igw_id
   }
-  
+
   tags = {
     Name = "${var.app_name}-private-rt"
   }

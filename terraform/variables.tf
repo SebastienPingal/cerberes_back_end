@@ -45,12 +45,6 @@ variable "security_group_id" {
   default     = ""
 }
 
-variable "create_igw" {
-  description = "Whether to create an internet gateway"
-  type        = bool
-  default     = true
-}
-
 variable "db_subnet_group_id" {
   description = "The ID of an existing DB subnet group to use (optional)"
   type        = string
