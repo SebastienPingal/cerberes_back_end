@@ -48,10 +48,6 @@ locals {
 
   # Get the public subnet ID to use for EC2
   public_subnet_id = length(local.public_subnet_ids) > 0 ? local.public_subnet_ids[0] : null
-
-  # Internet gateway ID - try to use existing one first, then our created one if it exists
-  igw_id = try(data.aws_internet_gateway.existing.id, length(aws_internet_gateway.igw) > 0 ? aws_internet_gateway.igw[0].id : null)
-
 }
 
 # Get public subnets in the default VPC
@@ -118,7 +114,7 @@ output "private_subnet_ids" {
 # Create an Internet Gateway only if one doesn't exist
 resource "aws_internet_gateway" "igw" {
   # Only create if no internet gateway is attached to the VPC
-  count  = local.igw_id != "" ? 0 : 1
+  count  = var.igw_id != "" ? 0 : 1
   vpc_id = local.vpc_id
 
   tags = {
@@ -137,7 +133,7 @@ resource "aws_route_table" "private_rt" {
 
   route {
     cidr_block = "0.0.0.0/0"
-    gateway_id = local.igw_id
+    gateway_id = var.igw_id
   }
 
   tags = {

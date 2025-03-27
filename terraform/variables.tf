@@ -56,3 +56,9 @@ variable "ec2_id" {
   type        = string
   default     = ""
 }
+
+variable "igw_id" {
+  description = "The ID of the existing internet gateway"
+  type        = string
+  default     = ""
+}

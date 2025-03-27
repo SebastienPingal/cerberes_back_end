@@ -114,6 +114,15 @@ jobs:
           fi
           echo "CERBERES_SG_ID=$CERBERES_SG_ID" >> $GITHUB_ENV
 
+          # Check for existing internet gateway
+          IGW_ID=$(aws ec2 describe-internet-gateways --filters "Name=tag:Name,Values=cerberes-igw" --query "InternetGateways[0].InternetGatewayId" --output text || echo "")
+          if [ "$IGW_ID" != "" ]; then
+            echo "✅ Found existing internet gateway: $IGW_ID"
+          else
+            echo "🆕 No existing internet gateway found"
+          fi
+          echo "IGW_ID=$IGW_ID" >> $GITHUB_ENV
+
       # Create terraform.tfvars file
       - name: Create terraform.tfvars
         run: |
@@ -128,6 +137,7 @@ jobs:
           ec2_id = "${{ env.EC2_ID }}"
           security_group_id = "${{ env.CERBERES_SG_ID }}"
           db_subnet_group_id = "${{ env.DB_SUBNET_GROUP_ID }}"
+          igw_id = "${{ env.IGW_ID }}"
           EOT
           
           echo "🔑 Created terraform.tfvars with configuration"
