@@ -66,7 +66,7 @@ jobs:
           echo "EC2_ID=$EC2_ID" >> $GITHUB_ENV
           
           # Check for existing RDS instance
-          RDS_ENDPOINT=$(aws rds describe-db-instances --db-instance-identifier cerberes-db --availability-zone ${{ secrets.AWS_REGION }}a --query "DBInstances[0].Endpoint.Address" --output text || echo "")
+          RDS_ENDPOINT=$(aws rds describe-db-instances --db-instance-identifier cerberes-db --query "DBInstances[0].Endpoint.Address" --output text || echo "")
           if [ "$RDS_ENDPOINT" != "" ]; then
             echo "✅ Found existing RDS instance: $RDS_ENDPOINT"
           else
@@ -75,7 +75,7 @@ jobs:
           echo "RDS_ENDPOINT=$RDS_ENDPOINT" >> $GITHUB_ENV
           
           # Check for existing DB subnet group
-          DB_SUBNET_GROUP_ID=$(aws rds describe-db-subnet-groups --db-subnet-group-name cerberes-db-subnet-group --availability-zone ${{ secrets.AWS_REGION }}a --query "DBSubnetGroups[0].DBSubnetGroupName" --output text || echo "")
+          DB_SUBNET_GROUP_ID=$(aws rds describe-db-subnet-groups --db-subnet-group-name cerberes-db-subnet-group --query "DBSubnetGroups[0].DBSubnetGroupName" --output text || echo "")
           if [ "$DB_SUBNET_GROUP_ID" != "" ]; then
             echo "✅ Found existing DB subnet group: $DB_SUBNET_GROUP_ID"
           else
