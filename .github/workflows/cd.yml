@@ -111,6 +111,8 @@ jobs:
           else
             echo "❌ Subnets do not have sufficient capacity"
           fi
+          echo "SUBNET_AZA_CAPACITY=$SUBNET_AZA_CAPACITY" >> $GITHUB_ENV
+          echo "SUBNET_AZB_CAPACITY=$SUBNET_AZB_CAPACITY" >> $GITHUB_ENV
           
           # Check for existing security group
           CERBERES_SG_ID=$(aws ec2 describe-security-groups --filters "Name=group-name,Values=cerberes-sg" "Name=vpc-id,Values=$DEFAULT_VPC_ID" --query "SecurityGroups[0].GroupId" --output text || echo "")
