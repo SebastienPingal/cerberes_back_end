@@ -114,7 +114,7 @@ output "private_subnet_ids" {
 # Create an Internet Gateway only if one doesn't exist
 resource "aws_internet_gateway" "igw" {
   # Only create if no internet gateway is attached to the VPC
-  count  = var.igw_id != "" ? 0 : 1
+  count  = var.igw_id != "" && var.igw_id != "None" ? 0 : 1
   vpc_id = local.vpc_id
 
   tags = {
@@ -133,7 +133,7 @@ resource "aws_route_table" "private_rt" {
 
   route {
     cidr_block = "0.0.0.0/0"
-    gateway_id = var.igw_id
+    gateway_id = var.igw_id != "" && var.igw_id != "None" ? var.igw_id : aws_internet_gateway.igw[0].id
   }
 
   tags = {
