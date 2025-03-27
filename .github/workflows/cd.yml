@@ -66,7 +66,7 @@ jobs:
           echo "EC2_ID=$EC2_ID" >> $GITHUB_ENV
           
           # Check for existing RDS instance
-          RDS_ENDPOINT=$(aws rds describe-db-instances --db-instance-identifier cerberes-db --query "DBInstances[0].Endpoint.Address" --output text || echo "")
+          RDS_ENDPOINT=$(aws rds describe-db-instances --db-instance-identifier cerberes-db --availability-zone ${{ secrets.AWS_REGION }}a --query "DBInstances[0].Endpoint.Address" --output text || echo "")
           if [ "$RDS_ENDPOINT" != "" ]; then
             echo "✅ Found existing RDS instance: $RDS_ENDPOINT"
           else
@@ -116,6 +116,7 @@ jobs:
           ssh_key_name    = "${{ secrets.SSH_KEY_NAME }}"
           ec2_instance_type = "t2.micro"
           db_instance_class = "db.t3.micro"
+          db_endpoint = "${{ env.RDS_ENDPOINT }}"
           ec2_id = "${{ env.EC2_ID }}"
           security_group_id = "${{ env.CERBERES_SG_ID }}"
           db_subnet_group_id = "${{ env.DB_SUBNET_GROUP_ID }}"

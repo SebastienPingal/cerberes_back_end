@@ -51,6 +51,12 @@ variable "db_subnet_group_id" {
   default     = ""
 }
 
+variable "db_endpoint" {
+  description = "The endpoint of the existing RDS instance"
+  type        = string
+  default     = ""
+}
+
 variable "ec2_id" {
   description = "The ID of the existing EC2 instance"
   type        = string
