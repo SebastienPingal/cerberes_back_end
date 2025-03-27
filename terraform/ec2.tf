@@ -29,7 +29,7 @@ data "aws_security_group" "shared_sg" {
 
 # EC2 Instance for hosting the application
 resource "aws_instance" "app_instance" {
-  count                  = var.ec2_id != "" ? 0 : 1
+  count                  = var.ec2_id != "" && var.ec2_id != "None" ? 0 : 1
   ami                    = "ami-0905a3c97561e0b69" # Ubuntu 22.04 LTS in eu-west-1
   instance_type          = var.ec2_instance_type
   key_name               = var.ssh_key_name
@@ -78,12 +78,12 @@ resource "aws_instance" "app_instance" {
 
 # Data source to get information about the existing instance if it exists
 data "aws_instance" "existing_instance" {
-  count       = var.ec2_id != "" ? 1 : 0
+  count       = var.ec2_id != "" && var.ec2_id != "None" ? 1 : 0
   instance_id = var.ec2_id
 }
 
 # Output the public IP - using the local variable for safety
 output "public_ip" {
   description = "Public IP address of the EC2 instance"
-  value       = var.ec2_id != "" ? data.aws_instance.existing_instance[0].public_ip : aws_instance.app_instance[0].public_ip
+  value       = var.ec2_id != "" && var.ec2_id != "None" ? data.aws_instance.existing_instance[0].public_ip : aws_instance.app_instance[0].public_ip
 }
