@@ -1,4 +1,5 @@
 import { DataTypes, Sequelize, Model } from 'sequelize'
+import pg from 'pg'
 import dotenv from 'dotenv'
 import {
   IUser,
