@@ -9,7 +9,7 @@
     "dev": "nodemon src/server.ts",
     "lint": "eslint --ext .ts --fix",
     "build": "tsc",
-    "vercel-build": "npm run build"
+    "vercel-build": "pnpm build"
   },
   "keywords": [],
   "author": "",
