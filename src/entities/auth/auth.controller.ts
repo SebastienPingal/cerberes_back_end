@@ -32,6 +32,8 @@ export default class auth_controller {
           maxAge: 1000 * 60 * 60 * 24 * 7,
           sameSite: 'none',
           secure: true,
+          partitioned: true,
+          domain: process.env.COOKIE_DOMAIN || undefined
         })
       res.json(full_user)
 
@@ -69,6 +71,9 @@ export default class auth_controller {
           maxAge: 1000 * 60 * 60 * 24 * 7, // 1 week
           sameSite: 'none',
           secure: true,
+          partitioned: true,
+          // Set to backend domain (e.g. .yourdomain.com) to allow cookie sharing across subdomains
+          domain: process.env.COOKIE_DOMAIN || undefined
         })
       res.json(existing_user)
     } catch (error) {
