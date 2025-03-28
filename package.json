@@ -46,5 +46,8 @@
     "ignoredBuiltDependencies": [
       "bcrypt"
     ]
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }
