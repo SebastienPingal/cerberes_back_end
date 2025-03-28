@@ -15,7 +15,10 @@ if (!process.env.DATABASE_URL) {
   throw new Error('Please define the DATABASE_URL environment variable inside .env')
 }
 
-const sequelize = new Sequelize(process.env.DATABASE_URL)
+const sequelize = new Sequelize(process.env.DATABASE_URL, {
+  dialect: 'postgres',
+  dialectModule: pg,
+})
 
 class User extends Model<IUser, IUserCreation> implements IUser {
   User_id!: number
