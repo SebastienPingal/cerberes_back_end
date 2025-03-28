@@ -13,3 +13,4 @@ terraform.tfvars
 *.tfvars.json
 .terraform/
 .terraform.lock.hcl
+.vercel
