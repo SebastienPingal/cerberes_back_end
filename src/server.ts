@@ -27,10 +27,18 @@ async function initDatabase() {
   }
 }
 
-// Start server and initialize database
-app.listen(port, async () => {
-  console.log(`🚀 Server is running on port ${port}`)
-  await initDatabase()
-})
-
+// Mount the router
 app.use(router)
+
+// Start server and initialize database
+if (process.env.NODE_ENV !== 'production') {
+  app.listen(port, async () => {
+    console.log(`🚀 Server is running on port ${port}`)
+    await initDatabase()
+  })
+} else {
+  // For Vercel, we need to export the app
+  initDatabase().catch(console.error)
+}
+
+export default app
