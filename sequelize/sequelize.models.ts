@@ -11,11 +11,11 @@ import {
 
 dotenv.config()
 
-if (!process.env.POSTGRES_URL) {
-  throw new Error('Please define the POSTGRES_URL environment variable inside .env')
+if (!process.env.DATABASE_URL) {
+  throw new Error('Please define the DATABASE_URL environment variable inside .env')
 }
 
-const sequelize = new Sequelize(process.env.POSTGRES_URL)
+const sequelize = new Sequelize(process.env.DATABASE_URL)
 
 class User extends Model<IUser, IUserCreation> implements IUser {
   User_id!: number
