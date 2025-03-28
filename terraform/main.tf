@@ -126,7 +126,7 @@ resource "aws_route_table" "public_rt" {
     Name = "${var.app_name}-public-rt"
   }
 
-  depends_on = [aws_internet_gateway_attachment]
+  depends_on = [aws_internet_gateway_attachment.igw_attachment]
 }
 
 # Associate the route table with public subnets
