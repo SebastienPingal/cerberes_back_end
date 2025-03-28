@@ -30,7 +30,8 @@ export default class auth_controller {
         {
           httpOnly: true,
           maxAge: 1000 * 60 * 60 * 24 * 7,
-          sameSite: 'lax',
+          sameSite: 'none',
+          secure: true,
         })
       res.json(full_user)
 
@@ -66,7 +67,8 @@ export default class auth_controller {
         {
           httpOnly: true,
           maxAge: 1000 * 60 * 60 * 24 * 7, // 1 week
-          sameSite: 'lax',
+          sameSite: 'none',
+          secure: true,
         })
       res.json(existing_user)
     } catch (error) {
