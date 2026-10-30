@@ -1,4 +1,5 @@
-import { Message } from '../../../sequelize/sequelize.models'
+import { Op } from 'sequelize'
+import { Message, UserConversation } from '../../../sequelize/sequelize.models'
 import { IMessage } from '../../types'
 import messages_helper from './messages.helper'
 
@@ -53,6 +54,28 @@ export default class message_model {
       await Message.destroy({
         where: {
           Message_id,
+        },
+      })
+    } catch (error) {
+      const typedError = error as Error
+      console.error(typedError.message)
+      throw new Error(typedError.message)
+    }
+  }
+
+  // Delete messages received by the user: never their own, only in conversations they belong to
+  static async delete_received(User_id: number, Message_ids: number[]): Promise<number> {
+    try {
+      const memberships = await UserConversation.findAll({
+        where: { User_id },
+        attributes: ['Conversation_id'],
+      })
+
+      return await Message.destroy({
+        where: {
+          Message_id: Message_ids,
+          Sender_id: { [Op.ne]: User_id },
+          Conversation_id: memberships.map(membership => membership.Conversation_id),
         },
       })
     } catch (error) {

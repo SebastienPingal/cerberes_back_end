@@ -1,5 +1,6 @@
 import { type Request, type Response } from 'express'
 import conversation from './conversations.model'
+import conversations_helper from './conversations.helper'
 import user from '../users/users.model'
 import type { IConversation, IUser } from '../../types'
 
@@ -24,23 +25,17 @@ export default class conversation_controller {
 
   static async create_conversation(req: Request, res: Response) {
     try {
-      const { members_id } = req.body
       const this_user = req.user as IUser
-      members_id.push(this_user.User_id)
+      if (!this_user) throw new Error('User is required')
+      const members_id = conversations_helper.parse_members_id(req.body.members_id, this_user.User_id)
 
       // check if all members_id match existing users
-      const existing_member = await members_id.every(async (member_id: number) => {
-        const member = await user.find_one_by_id(member_id)
-        if (member) {
-          return true
-        }
-      })
-
-      if (!existing_member) {
+      const all_members_exist = await user.all_exist(members_id)
+      if (!all_members_exist) {
         throw new Error('Invalid member_id')
       }
 
-      //check if conversatgion already exist
+      //check if conversation already exist
       const existing_conversation = await conversation.find_one_by_members_id(members_id)
       if (existing_conversation) {
         throw new Error('Conversation already exist')

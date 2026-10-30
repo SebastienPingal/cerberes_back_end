@@ -1,7 +1,7 @@
 import { User, Message, Conversation, UserConversation } from '../../../sequelize/sequelize.models'
-import { Op } from 'sequelize'
+import { Op, QueryTypes } from 'sequelize'
 import { sequelize } from '../../utils/sequelize.client'
-import { IConversation, IUser } from '../../types'
+import { IUser } from '../../types'
 import message_helper from '../messages/messages.helper'
 
 export default class conversation_model {
@@ -96,22 +96,24 @@ export default class conversation_model {
     }
   }
 
+  // Find the conversation whose members are exactly members_id (no more, no less)
   static async find_one_by_members_id(members_id: number[]) {
     try {
-      const [results, metadata] = await sequelize.query(`
-      SELECT "Conversation"."Conversation_id"
-      FROM "Conversations" AS "Conversation"
-      INNER JOIN "UserConversations" AS "Users"
-      ON "Conversation"."Conversation_id" = "Users"."Conversation_id"
-      WHERE "Users"."User_id" IN (${members_id.join(',')})
-      GROUP BY "Conversation"."Conversation_id"
-      HAVING COUNT(DISTINCT "Users"."User_id") = ${members_id.length}
-    `) as [IConversation[], any]
+      const results = await sequelize.query<{ Conversation_id: number }>(`
+      SELECT "Conversation_id"
+      FROM "UserConversations"
+      GROUP BY "Conversation_id"
+      HAVING COUNT(DISTINCT "User_id") = :members_count
+        AND COUNT(DISTINCT "User_id") FILTER (WHERE "User_id" IN (:members_id)) = :members_count
+    `, {
+        replacements: { members_id, members_count: members_id.length },
+        type: QueryTypes.SELECT,
+      })
 
       const conversation_id = results[0]?.Conversation_id;
 
       if (!conversation_id) {
-        throw new Error('Unable to find conversation');
+        return null
       }
 
       const conversation = await Conversation.findOne({
@@ -128,8 +130,7 @@ export default class conversation_model {
       return conversation
     } catch (error) {
       const typed_error = error as Error
-      console.error(typed_error.message)
-      // throw new Error(`Unable to find conversation : ${typed_error.message}`)
+      throw new Error(`Unable to find conversation : ${typed_error.message}`)
     }
   }
 

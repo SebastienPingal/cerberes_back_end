@@ -173,6 +173,11 @@ export default class user {
     }
   }
 
+  static async all_exist(ids: number[]) {
+    const count = await User.count({ where: { User_id: ids } })
+    return count === ids.length
+  }
+
   static async check_if_email_is_used(email: string) {
     // throw error if email already exists
     const existing_user = await User.findOne({ where: { User_email: email } })
