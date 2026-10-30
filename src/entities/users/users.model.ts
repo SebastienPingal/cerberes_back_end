@@ -58,7 +58,6 @@ export default class user {
         contact.AddedBy.signing_public_key = message_helper.convert_buffer_to_uint8Array(contact.AddedBy.signing_public_key as Buffer)
       })
 
-      delete userWithLists.User_password
       return userWithLists
     } catch (error) {
       const typedError = error as Error
@@ -110,7 +109,6 @@ export default class user {
         contact.AddedBy.signing_public_key = message_helper.convert_buffer_to_uint8Array(contact.AddedBy.signing_public_key as Buffer)
       })
 
-      delete userWithLists.User_password
       return userWithLists
     } catch (error) {
       const typedError = error as Error
@@ -119,57 +117,17 @@ export default class user {
     }
   }
 
-  static async find_one_by_email(email: string): Promise<IUser | undefined> {
+  // Only used to check a password at login: the result must never be sent to a client
+  static async find_credentials_by_email(email: string) {
     try {
-      console.log('finding user with email', email)
-      const userWithLists = await User.findOne({
+      return await User.scope('with_password').findOne({
         where: { User_email: email },
-        include: [
-          {
-            model: Contact,
-            as: 'contact_list',
-            required: false,
-            include: [{
-              model: User,
-              as: 'User',
-              attributes: ['User_name', 'encryption_public_key', 'signing_public_key', 'User_id']
-            }]
-          },
-          {
-            model: Contact,
-            as: 'demands',
-            required: false,
-            include: [{
-              model: User,
-              as: 'AddedBy',
-              attributes: ['User_name', 'encryption_public_key', 'signing_public_key', 'User_id']
-            }]
-          }]
-      }) as IUser
-
-      if (!userWithLists) throw new Error('User not found')
-
-      if (userWithLists.encryption_public_key && userWithLists.signing_public_key) {
-        userWithLists.encryption_public_key = message_helper.convert_buffer_to_uint8Array(userWithLists.encryption_public_key as Buffer)
-        userWithLists.signing_public_key = message_helper.convert_buffer_to_uint8Array(userWithLists.signing_public_key as Buffer)
-      }
-      userWithLists.contact_list?.forEach((contact: IContact) => {
-        if (!contact.User || !contact.User.encryption_public_key || !contact.User.signing_public_key) return
-        contact.User.encryption_public_key = message_helper.convert_buffer_to_uint8Array(contact.User.encryption_public_key as Buffer)
-        contact.User.signing_public_key = message_helper.convert_buffer_to_uint8Array(contact.User.signing_public_key as Buffer)
+        attributes: ['User_id', 'User_password'],
       })
-      userWithLists.demands?.forEach((contact: IContact) => {
-        if (!contact.AddedBy || !contact.AddedBy.encryption_public_key || !contact.AddedBy.signing_public_key) return
-        contact.AddedBy.encryption_public_key = message_helper.convert_buffer_to_uint8Array(contact.AddedBy.encryption_public_key as Buffer)
-        contact.AddedBy.signing_public_key = message_helper.convert_buffer_to_uint8Array(contact.AddedBy.signing_public_key as Buffer)
-      })
-
-      delete userWithLists.User_password
-      return userWithLists
     } catch (error) {
       const typedError = error as Error
       console.error(typedError.message)
-      throw new Error(`Unable to find user with email ${email} : ${typedError.message}`)
+      throw new Error('Unable to find user credentials')
     }
   }
 
@@ -200,21 +158,16 @@ export default class user {
       if (!user_to_update || !update) {
         throw new Error('Invalid input')
       }
-      const { User_id, User_password, ...fields_to_update } = update
+      // Only explicitly allowed fields can be changed here: email, password,
+      // contact uuid and public keys have their own dedicated flows.
+      const { User_name } = update
 
       await User.update(
-        fields_to_update,
+        { User_name },
         { where: { User_id: user_to_update.User_id } }
       )
 
-      let updated_user = {} as IUser
-      await User.findOne({ where: { User_id: user_to_update.User_id } })
-        .then((response) => {
-          if (!response) throw new Error('Could not find user after update')
-          updated_user = response.dataValues as IUser
-        })
-
-      return this.find_one_by_id(updated_user.User_id)
+      return this.find_one_by_id(user_to_update.User_id)
 
     } catch (error) {
       const typedError = error as Error

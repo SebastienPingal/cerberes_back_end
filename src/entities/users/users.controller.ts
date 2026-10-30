@@ -1,6 +1,7 @@
 import { type Request, type Response } from 'express'
 import type { IUser, IUserUpdate } from '../../types'
 import user from './users.model'
+import auth_helper from '../auth/auth.helper'
 
 export default class user_controller {
   static async get_user(req: Request, res: Response) {
@@ -21,11 +22,11 @@ export default class user_controller {
     try {
       const user_to_update = req.user as IUser
       if (!user_to_update) throw new Error('User is required')
-      const update = req.body as IUserUpdate
+      const update: IUserUpdate = { User_name: req.body.User_name }
+      auth_helper.validate_name(update.User_name)
 
       const updated_user = await user.update_one_by_id(user_to_update, update) as IUser
       if (!updated_user) throw new Error('Unable to update user')
-      delete updated_user.User_password
 
       res.status(200)
       res.send(updated_user)
@@ -45,7 +46,6 @@ export default class user_controller {
       const { encryption_public_key, signing_public_key } = req.body
       const updated_user = await user.update_public_keys(user_to_update, encryption_public_key, signing_public_key) as IUser
       if (!updated_user) throw new Error('Unable to update user')
-      delete updated_user.User_password
 
       res.status(200)
       res.send(updated_user)

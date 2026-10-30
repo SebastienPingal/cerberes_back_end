@@ -1,14 +1,35 @@
+import { randomUUID } from 'crypto'
 import jwt from 'jsonwebtoken'
+import type { CookieOptions, Response } from 'express'
 import { IUser } from '../../types'
 import { env } from '../../utils/env'
 
+const AUTH_COOKIE_NAME = 'token'
+const AUTH_COOKIE_MAX_AGE = 1000 * 60 * 60 * 24 * 7 // 1 week, same as the JWT
+
 export default class auth_helper {
+    // The contact uuid is shared to be added as a contact: it must not be guessable
     static generate_uuid() {
-        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
-            const r = Math.random() * 16 | 0
-            const v = c == 'x' ? r : (r & 0x3 | 0x8)
-            return v.toString(16)
-        })
+        return randomUUID()
+    }
+
+    static auth_cookie_options(): CookieOptions {
+        return {
+            httpOnly: true,
+            sameSite: 'none',
+            secure: true,
+            partitioned: true,
+            // Set to backend domain (e.g. .yourdomain.com) to allow cookie sharing across subdomains
+            domain: env.COOKIE_DOMAIN
+        }
+    }
+
+    static set_auth_cookie(res: Response, token: string) {
+        res.cookie(AUTH_COOKIE_NAME, token, { ...auth_helper.auth_cookie_options(), maxAge: AUTH_COOKIE_MAX_AGE })
+    }
+
+    static clear_auth_cookie(res: Response) {
+        res.clearCookie(AUTH_COOKIE_NAME, auth_helper.auth_cookie_options())
     }
 
     static generate_JWT(user: IUser) {
@@ -21,7 +42,8 @@ export default class auth_helper {
         return token
     }
 
-    static validate_password(password: string) {
+    static validate_password(password: unknown) {
+        if (typeof password !== 'string') throw new Error('Password is required')
         const error_message = []
         if (password.length < 8) {
             error_message.push('Password must be at least 8 characters long')
@@ -43,7 +65,8 @@ export default class auth_helper {
         }
     }
 
-    static validate_email(email: string) {
+    static validate_email(email: unknown) {
+        if (typeof email !== 'string') throw new Error('Email is required')
         const error_message = []
         if (email.length > 50) {
             error_message.push('Email must be less than 50 characters long')
@@ -56,7 +79,8 @@ export default class auth_helper {
         }
     }
 
-    static validate_name(name: string) {
+    static validate_name(name: unknown) {
+        if (typeof name !== 'string') throw new Error('Name is required')
         const error_message = []
         if (name.length > 50) {
             error_message.push('Name must be less than 50 characters long')

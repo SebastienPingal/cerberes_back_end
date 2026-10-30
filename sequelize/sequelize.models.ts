@@ -23,6 +23,15 @@ class User extends Model<IUser, IUserCreation> implements IUser {
   User_contact_uuid?: string
   encryption_public_key?: Buffer
   signing_public_key?: Buffer
+
+  // Defense in depth: never serialize the password hash, even when it was loaded
+  toJSON<T extends IUser>(): T
+  toJSON(): object
+  toJSON(): object {
+    const values: Partial<IUser> = { ...this.get({ plain: true }) }
+    delete values.User_password
+    return values
+  }
 }
 
 User.init(
@@ -43,10 +52,12 @@ User.init(
     User_email: {
       type: DataTypes.STRING,
       allowNull: false,
+      unique: true,
     },
     User_contact_uuid: {
       type: DataTypes.STRING,
       allowNull: false,
+      unique: true,
     },
     encryption_public_key: {
       type: DataTypes.BLOB,
@@ -60,6 +71,15 @@ User.init(
   {
     sequelize,
     modelName: 'User',
+    // The password hash is only loaded on demand, with User.scope('with_password')
+    defaultScope: {
+      attributes: { exclude: ['User_password'] },
+    },
+    scopes: {
+      with_password: {
+        attributes: { include: ['User_password'] },
+      },
+    },
   }
 )
 
@@ -94,6 +114,7 @@ Contact.init(
   {
     sequelize,
     modelName: 'Contact',
+    indexes: [{ unique: true, fields: ['User_id', 'Contact_User_id'] }],
   }
 )
 
