@@ -1,6 +1,5 @@
 import { DataTypes, Sequelize, Model } from 'sequelize'
 import pg from 'pg'
-import dotenv from 'dotenv'
 import {
   IUser,
   IUserCreation,
@@ -9,14 +8,9 @@ import {
   IUserConversation,
   IMessage,
 } from '../src/types'
+import { env } from '../src/utils/env'
 
-dotenv.config()
-
-if (!process.env.DATABASE_URL) {
-  throw new Error('Please define the DATABASE_URL environment variable inside .env')
-}
-
-const sequelize = new Sequelize(process.env.DATABASE_URL, {
+const sequelize = new Sequelize(env.DATABASE_URL, {
   dialect: 'postgres',
   dialectModule: pg,
 })

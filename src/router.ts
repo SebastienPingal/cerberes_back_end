@@ -9,17 +9,12 @@ import cookieParser from 'cookie-parser'
 import { testConnection } from './utils/sequelize.client'
 import { User, Contact, Conversation, UserConversation, Message } from '../sequelize/sequelize.models'
 import cors from 'cors'
+import { env } from './utils/env'
 
 const router = Router()
 
 router.use(cors({
-  origin: (origin, callback) => {
-    try {
-      callback(null, true);
-    } catch (error) {
-      console.error('Error inside CORS Middleware', error);
-    }
-  },
+  origin: env.CORS_ORIGINS,
   credentials: true
 }))
 

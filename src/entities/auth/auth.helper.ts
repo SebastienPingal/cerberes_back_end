@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken'
 import { IUser } from '../../types'
+import { env } from '../../utils/env'
 
 export default class auth_helper {
     static generate_uuid() {
@@ -11,13 +12,12 @@ export default class auth_helper {
     }
 
     static generate_JWT(user: IUser) {
-        const JWT_secret = process.env.JWT_SECRET ?? 'mysecret869'
         const payload = {
             id: user.User_id,
             name: user.User_name,
             uuid: user.User_contact_uuid
         }
-        const token = jwt.sign(payload, JWT_secret, { expiresIn: '1w' })
+        const token = jwt.sign(payload, env.JWT_SECRET, { algorithm: 'HS256', expiresIn: '1w' })
         return token
     }
 

@@ -1,13 +1,7 @@
 import { Sequelize } from 'sequelize'
-import dotenv from 'dotenv'
+import { env } from './env'
 
-dotenv.config()
-
-if (!process.env.DATABASE_URL) {
-  throw new Error('Please define the DATABASE_URL environment variable inside .env');
-}
-
-const sequelize = new Sequelize(process.env.DATABASE_URL);
+const sequelize = new Sequelize(env.DATABASE_URL);
 
 async function testConnection() {
   try {

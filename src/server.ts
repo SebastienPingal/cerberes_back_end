@@ -1,11 +1,11 @@
+import { env } from './utils/env'
 import express from 'express'
 import router from './router'
-import { sequelize } from './utils/sequelize.client'
 import { User, Contact, Conversation, UserConversation, Message } from '../sequelize/sequelize.models'
 
 const app = express()
 
-const port = process.env.PORT ?? 3000
+const port = env.PORT
 
 app.use(express.json())
 
@@ -31,7 +31,7 @@ async function initDatabase() {
 app.use(router)
 
 // Start server and initialize database
-if (process.env.NODE_ENV !== 'production') {
+if (env.NODE_ENV !== 'production') {
   app.listen(port, async () => {
     console.log(`🚀 Server is running on port ${port}`)
     await initDatabase()
