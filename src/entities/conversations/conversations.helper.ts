@@ -1,19 +1,31 @@
+import type { IAddedDevice } from '../messages/messages.model'
+import { is_uuid } from '../../utils/binary'
+import { http_error } from '../../utils/http_error'
+
 export default class conversations_helper {
-  /**
-   * Validate a list of member ids coming from the client and add the current user to it.
-   * Throws if the input is not a non-empty array of positive integers.
-   */
-  static parse_members_id(raw_members_id: unknown, current_user_id: number): number[] {
-    if (!Array.isArray(raw_members_id) || raw_members_id.length === 0) {
-      throw new Error('members_id must be a non-empty array')
+  static parse_epoch(raw_epoch: unknown): number {
+    if (!Number.isInteger(raw_epoch) || (raw_epoch as number) < 0) {
+      throw new http_error(400, 'epoch must be a positive integer')
     }
-    if (!raw_members_id.every(id => Number.isInteger(id) && id > 0)) {
-      throw new Error('members_id must only contain user ids')
+    return raw_epoch as number
+  }
+
+  // Devices added by a commit, with the reference of the key package used for each of them
+  static parse_added_devices(raw_added: unknown): IAddedDevice[] {
+    if (!Array.isArray(raw_added) || raw_added.length > 100) {
+      throw new http_error(400, 'added must be a list of devices')
     }
-    const members_id = [...new Set<number>([...raw_members_id, current_user_id])]
-    if (members_id.length < 2) {
-      throw new Error('A conversation needs at least one other member')
+    const added = raw_added.map((item: { Device_id?: unknown, KeyPackage_ref?: unknown }) => {
+      const Device_id = item?.Device_id
+      const KeyPackage_ref = item?.KeyPackage_ref
+      if (!is_uuid(Device_id) || typeof KeyPackage_ref !== 'string') {
+        throw new http_error(400, 'added devices need a Device_id and a KeyPackage_ref')
+      }
+      return { Device_id, KeyPackage_ref }
+    })
+    if (new Set(added.map(item => item.Device_id)).size !== added.length) {
+      throw new http_error(400, 'A device can only be added once')
     }
-    return members_id
+    return added
   }
 }

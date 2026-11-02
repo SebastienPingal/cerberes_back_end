@@ -31,16 +31,16 @@ export default class contact {
 
   static async find_all_by_user_id(id: number) {
     try {
-      console.log('finding contacts for user id: ', id);
       const contacts = await Contact.findAll({
         where: {
           User_id: id,
         },
         include: [{
           model: User,
-          attributes: ['User_name', 'encryption_public_key', 'signing_public_key']
+          as: 'User',
+          attributes: ['User_id', 'User_name', 'identity_public_key']
         }]
-      });
+      }) as IContact[];
 
       return contacts;
     } catch (error) {

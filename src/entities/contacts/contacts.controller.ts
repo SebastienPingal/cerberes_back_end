@@ -11,7 +11,11 @@ export default class contact_controller {
 
       const contacts = await contact.find_all_by_user_id(this_user.User_id)
       res.status(200)
-      res.send(contacts)
+      res.json(contacts.map((this_contact: IContact) => ({
+        Contact_id: this_contact.Contact_id,
+        Contact_User_id: this_contact.Contact_User_id,
+        User: user.serialize_public(this_contact.User),
+      })))
     } catch (error) {
       const typedError = error as Error
       console.error(typedError.message)

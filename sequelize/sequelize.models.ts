@@ -4,9 +4,13 @@ import {
   IUser,
   IUserCreation,
   IContact,
+  IDevice,
+  IKeyPackage,
   IConversation,
-  IUserConversation,
+  IConversationDevice,
   IMessage,
+  IDelivery,
+  MessageKind,
 } from '../src/types'
 import { env } from '../src/utils/env'
 
@@ -21,8 +25,7 @@ class User extends Model<IUser, IUserCreation> implements IUser {
   User_email!: string
   User_password!: string
   User_contact_uuid?: string
-  encryption_public_key?: Buffer
-  signing_public_key?: Buffer
+  identity_public_key?: Buffer | null
 
   // Defense in depth: never serialize the password hash, even when it was loaded
   toJSON<T extends IUser>(): T
@@ -59,14 +62,10 @@ User.init(
       allowNull: false,
       unique: true,
     },
-    encryption_public_key: {
+    identity_public_key: {
       type: DataTypes.BLOB,
       allowNull: true,
     },
-    signing_public_key: {
-      type: DataTypes.BLOB,
-      allowNull: true,
-    }
   },
   {
     sequelize,
@@ -98,6 +97,7 @@ Contact.init(
     },
     User_id: {
       type: DataTypes.INTEGER,
+      allowNull: false,
       references: {
         model: User,
         key: 'User_id',
@@ -105,6 +105,7 @@ Contact.init(
     },
     Contact_User_id: {
       type: DataTypes.INTEGER,
+      allowNull: false,
       references: {
         model: User,
         key: 'User_id',
@@ -118,16 +119,104 @@ Contact.init(
   }
 )
 
-class Conversation extends Model<IConversation> implements IConversation {
-  Conversation_id!: number
+class Device extends Model<IDevice> implements IDevice {
+  Device_id!: string
+  User_id!: number
+  Device_name!: string
+  signature_public_key!: Buffer
+  certificate!: Buffer
+  createdAt?: Date
+}
+
+Device.init(
+  {
+    Device_id: {
+      type: DataTypes.UUID,
+      primaryKey: true,
+    },
+    User_id: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      references: {
+        model: User,
+        key: 'User_id',
+      },
+    },
+    Device_name: {
+      type: DataTypes.STRING,
+      allowNull: false,
+    },
+    signature_public_key: {
+      type: DataTypes.BLOB,
+      allowNull: false,
+    },
+    certificate: {
+      type: DataTypes.BLOB,
+      allowNull: false,
+    },
+  },
+  {
+    sequelize,
+    modelName: 'Device',
+  }
+)
+
+class KeyPackage extends Model<IKeyPackage> implements IKeyPackage {
+  KeyPackage_id!: number
+  Device_id!: string
+  KeyPackage_ref!: string
+  key_package!: Buffer
+}
+
+KeyPackage.init(
+  {
+    KeyPackage_id: {
+      type: DataTypes.INTEGER,
+      primaryKey: true,
+      autoIncrement: true,
+    },
+    Device_id: {
+      type: DataTypes.UUID,
+      allowNull: false,
+      references: {
+        model: Device,
+        key: 'Device_id',
+      },
+    },
+    KeyPackage_ref: {
+      type: DataTypes.STRING,
+      allowNull: false,
+    },
+    key_package: {
+      type: DataTypes.BLOB,
+      allowNull: false,
+    },
+  },
+  {
+    sequelize,
+    modelName: 'KeyPackage',
+    indexes: [{ unique: true, fields: ['Device_id', 'KeyPackage_ref'] }],
+  }
+)
+
+class Conversation extends Model<IConversation, Partial<IConversation>> implements IConversation {
+  Conversation_id!: string
+  epoch!: number
+  createdAt?: Date
+  updatedAt?: Date
 }
 
 Conversation.init(
   {
     Conversation_id: {
-      type: DataTypes.INTEGER,
+      type: DataTypes.UUID,
       primaryKey: true,
-      autoIncrement: true,
+      defaultValue: DataTypes.UUIDV4,
+    },
+    epoch: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 0,
     },
   },
   {
@@ -136,46 +225,46 @@ Conversation.init(
   }
 )
 
-class UserConversation extends Model<IUserConversation> implements IUserConversation {
-  UserConversation_id!: number
-  User_id!: number
-  Conversation_id!: number
+class ConversationDevice extends Model<IConversationDevice> implements IConversationDevice {
+  Conversation_id!: string
+  Device_id!: string
 }
 
-UserConversation.init(
+ConversationDevice.init(
   {
-    UserConversation_id: {
-      type: DataTypes.INTEGER,
-      primaryKey: true,
-      autoIncrement: true,
-    },
-    User_id: {
-      type: DataTypes.INTEGER,
-      references: {
-        model: User,
-        key: 'User_id',
-      },
-    },
     Conversation_id: {
-      type: DataTypes.INTEGER,
+      type: DataTypes.UUID,
+      primaryKey: true,
       references: {
         model: Conversation,
         key: 'Conversation_id',
       },
     },
+    Device_id: {
+      type: DataTypes.UUID,
+      primaryKey: true,
+      references: {
+        model: Device,
+        key: 'Device_id',
+      },
+    },
   },
   {
     sequelize,
-    modelName: 'UserConversation',
+    modelName: 'ConversationDevice',
   }
 )
 
 class Message extends Model<IMessage> implements IMessage {
   Message_id!: number
-  Conversation_id!: number
-  Sender_id!: number
-  Message_content!: Buffer
-  Nonce!: Buffer
+  Conversation_id!: string
+  Sender_device_id!: string
+  kind!: MessageKind
+  epoch!: number
+  payload!: Buffer
+  createdAt?: Date
+  // Loaded through the 'Sender' association
+  Sender?: Device
 }
 
 Message.init(
@@ -186,24 +275,30 @@ Message.init(
       autoIncrement: true,
     },
     Conversation_id: {
-      type: DataTypes.INTEGER,
+      type: DataTypes.UUID,
+      allowNull: false,
       references: {
         model: Conversation,
         key: 'Conversation_id',
       },
     },
-    Sender_id: {
-      type: DataTypes.INTEGER,
+    Sender_device_id: {
+      type: DataTypes.UUID,
+      allowNull: false,
       references: {
-        model: User,
-        key: 'User_id',
+        model: Device,
+        key: 'Device_id',
       },
     },
-    Message_content: {
-      type: DataTypes.BLOB,
+    kind: {
+      type: DataTypes.ENUM('commit', 'welcome', 'application'),
       allowNull: false,
     },
-    Nonce: {
+    epoch: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+    },
+    payload: {
       type: DataTypes.BLOB,
       allowNull: false,
     },
@@ -214,8 +309,42 @@ Message.init(
   }
 )
 
-User.belongsToMany(Conversation, { through: UserConversation, foreignKey: 'User_id' })
-Conversation.belongsToMany(User, { through: UserConversation, foreignKey: 'Conversation_id' })
+class Delivery extends Model<IDelivery> implements IDelivery {
+  Message_id!: number
+  Device_id!: string
+  KeyPackage_ref?: string | null
+  // Loaded through the 'Message' association
+  Message?: Message
+}
+
+Delivery.init(
+  {
+    Message_id: {
+      type: DataTypes.INTEGER,
+      primaryKey: true,
+      references: {
+        model: Message,
+        key: 'Message_id',
+      },
+    },
+    Device_id: {
+      type: DataTypes.UUID,
+      primaryKey: true,
+      references: {
+        model: Device,
+        key: 'Device_id',
+      },
+    },
+    KeyPackage_ref: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+  },
+  {
+    sequelize,
+    modelName: 'Delivery',
+  }
+)
 
 User.hasMany(Contact, { as: 'contact_list', foreignKey: 'User_id' })
 Contact.belongsTo(User, { as: 'AddedBy', foreignKey: 'User_id' })
@@ -223,7 +352,17 @@ Contact.belongsTo(User, { as: 'AddedBy', foreignKey: 'User_id' })
 User.hasMany(Contact, { as: 'demands', foreignKey: 'Contact_User_id' })
 Contact.belongsTo(User, { as: 'User', foreignKey: 'Contact_User_id' })
 
-Conversation.hasMany(Message, { as: 'Messages', foreignKey: 'Conversation_id' })
-Message.belongsTo(Conversation, { as: 'Conversation', foreignKey: 'Conversation_id' })
+User.hasMany(Device, { as: 'Devices', foreignKey: 'User_id' })
+Device.belongsTo(User, { as: 'User', foreignKey: 'User_id' })
 
-export { User, Contact, Conversation, UserConversation, Message }
+Device.hasMany(KeyPackage, { as: 'KeyPackages', foreignKey: 'Device_id' })
+
+Conversation.hasMany(ConversationDevice, { as: 'Members', foreignKey: 'Conversation_id' })
+ConversationDevice.belongsTo(Conversation, { as: 'Conversation', foreignKey: 'Conversation_id' })
+ConversationDevice.belongsTo(Device, { as: 'Device', foreignKey: 'Device_id' })
+
+Message.hasMany(Delivery, { as: 'Deliveries', foreignKey: 'Message_id' })
+Delivery.belongsTo(Message, { as: 'Message', foreignKey: 'Message_id' })
+Message.belongsTo(Device, { as: 'Sender', foreignKey: 'Sender_device_id' })
+
+export { sequelize, User, Contact, Device, KeyPackage, Conversation, ConversationDevice, Message, Delivery }

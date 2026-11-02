@@ -1,170 +1,55 @@
-import { User, Message, Conversation, UserConversation } from '../../../sequelize/sequelize.models'
-import { Op, QueryTypes } from 'sequelize'
-import { sequelize } from '../../utils/sequelize.client'
-import { IUser } from '../../types'
-import message_helper from '../messages/messages.helper'
+import { sequelize, User, Device, Conversation, ConversationDevice } from '../../../sequelize/sequelize.models'
 
 export default class conversation_model {
-  static async create_one(members_id: number[]) {
+  // A conversation starts as an MLS group with only its creator's device, at epoch 0.
+  // The creator then adds the other devices with a first commit.
+  static async create_one(creator_device_id: string) {
     try {
-      // Create the conversation
-      const new_conversation = await Conversation.create();
-
-      // Fetch the users associated with the provided member_ids
-      const users = await User.findAll({
-        where: {
-          User_id: members_id
-        }
-      });
-
-      // Associate the users with the conversation
-      await (new_conversation as any).addUsers(users);
-
-      return new_conversation;
-    } catch (err) {
-      throw new Error('Unable to create conversation');
+      return await sequelize.transaction(async (transaction) => {
+        const new_conversation = await Conversation.create({}, { transaction })
+        await ConversationDevice.create({
+          Conversation_id: new_conversation.Conversation_id,
+          Device_id: creator_device_id,
+        }, { transaction })
+        return new_conversation
+      })
+    } catch (error) {
+      const typed_error = error as Error
+      console.error(typed_error.message)
+      throw new Error('Unable to create conversation')
     }
   }
 
-  static async get_conversations(user_id: number) {
-    try {
-      const user = await User.findOne({
-        where: { User_id: user_id },
-        include: [
-          {
-            model: Conversation,
-            as: 'Conversations',
-            through: {
-              attributes: []
-            },
-            include: [
-              {
-                model: User,
-                as: 'Users',
-                where: {
-                  User_id: {
-                    [Op.ne]: user_id // Exclude the current user
-                  }
-                },
-                attributes: ['User_id', 'User_name', 'encryption_public_key', 'signing_public_key'],
-              },
-              {
-                model: Message,
-                as: 'Messages',
-                where: { Sender_id: { [Op.ne]: user_id } },
-                attributes: ['Message_id', 'Message_content', 'Nonce', 'createdAt', 'Sender_id'],
-              }
-            ]
-          }
-        ]
-      }) as IUser
-      if (!user) throw new Error('Unable to get user');
-      if (!user.Conversations) {
-        console.error('no conversations')
-        return []
-      }
+  // Conversations of a device, with the users behind their member devices
+  static async find_all_for_device(Device_id: string) {
+    const memberships = await ConversationDevice.findAll({ where: { Device_id }, attributes: ['Conversation_id'] })
+    const conversation_ids = memberships.map(membership => membership.Conversation_id)
+    if (!conversation_ids.length) return []
 
-      user.Conversations.forEach(conv => {
-        if (!conv.Users || !conv.Users.length) return
-        conv.Users.forEach(user => {
-          if (!user.encryption_public_key) return
-          if (user.encryption_public_key instanceof Buffer)
-            user.encryption_public_key = message_helper.convert_buffer_to_uint8Array(user.encryption_public_key);
+    const conversations = await Conversation.findAll({ where: { Conversation_id: conversation_ids } })
+    const all_members = await ConversationDevice.findAll({
+      where: { Conversation_id: conversation_ids },
+      include: [{
+        model: Device,
+        as: 'Device',
+        attributes: ['Device_id', 'User_id'],
+        include: [{ model: User, as: 'User', attributes: ['User_id', 'User_name'] }],
+      }],
+    }) as (ConversationDevice & { Device?: Device & { User?: User } })[]
 
-          if (!user.signing_public_key) return
-          if (user.signing_public_key instanceof Buffer)
-            user.signing_public_key = message_helper.convert_buffer_to_uint8Array(user.signing_public_key);
+    return conversations.map((this_conversation) => {
+      const members = new Map<number, { User_id: number, User_name: string }>()
+      all_members
+        .filter(member => member.Conversation_id === this_conversation.Conversation_id)
+        .forEach((member) => {
+          const member_user = member.Device?.User
+          if (member_user) members.set(member_user.User_id, { User_id: member_user.User_id, User_name: member_user.User_name })
         })
-
-        if (!conv.Messages || !conv.Messages.length) return
-        conv.Messages.forEach(msg => {
-          console.log("contenu", msg.Message_content)
-          if (!msg.Message_content) return
-          if (msg.Message_content instanceof Buffer)
-            msg.Message_content = message_helper.convert_buffer_to_uint8Array(msg.Message_content);
-
-          if (!msg.Nonce) return
-          if (msg.Nonce instanceof Buffer)
-            msg.Nonce = message_helper.convert_buffer_to_uint8Array(msg.Nonce);
-        })
-      })
-
-      return user.Conversations;
-    } catch (error) {
-      const typed_error = error as Error
-      throw new Error(`Unable to get conversations : ${typed_error.message}`)
-    }
-  }
-
-  // Find the conversation whose members are exactly members_id (no more, no less)
-  static async find_one_by_members_id(members_id: number[]) {
-    try {
-      const results = await sequelize.query<{ Conversation_id: number }>(`
-      SELECT "Conversation_id"
-      FROM "UserConversations"
-      GROUP BY "Conversation_id"
-      HAVING COUNT(DISTINCT "User_id") = :members_count
-        AND COUNT(DISTINCT "User_id") FILTER (WHERE "User_id" IN (:members_id)) = :members_count
-    `, {
-        replacements: { members_id, members_count: members_id.length },
-        type: QueryTypes.SELECT,
-      })
-
-      const conversation_id = results[0]?.Conversation_id;
-
-      if (!conversation_id) {
-        return null
+      return {
+        Conversation_id: this_conversation.Conversation_id,
+        epoch: this_conversation.epoch,
+        members: [...members.values()],
       }
-
-      const conversation = await Conversation.findOne({
-        where: { Conversation_id: conversation_id },
-        include: [
-          {
-            model: User,
-            as: 'Users',
-            attributes: ['User_id', 'User_name', 'encryption_public_key', 'signing_public_key'],
-          }
-        ]
-      });
-
-      return conversation
-    } catch (error) {
-      const typed_error = error as Error
-      throw new Error(`Unable to find conversation : ${typed_error.message}`)
-    }
-  }
-
-  static async find_one_by_id(conversation_id: number) {
-    try {
-      const conversation = await Conversation.findOne({
-        where: {
-          Conversation_id: conversation_id
-        },
-        include: [
-          {
-            model: User,
-            attributes: ['User_id', 'User_name']
-          }
-        ]
-      })
-      return conversation
-    } catch (error) {
-      throw new Error('Unable to find conversation')
-    }
-  }
-
-  static async find_user_in_conversation(user_id: number, conversation_id: number) {
-    try {
-      const user = await UserConversation.findOne({
-        where: {
-          User_id: user_id,
-          Conversation_id: conversation_id
-        }
-      })
-      return user
-    } catch (error) {
-      const typed_error = error as Error
-      throw new Error(`Unable to find user in conversation: ${typed_error.message}`)
-    }
+    })
   }
 }

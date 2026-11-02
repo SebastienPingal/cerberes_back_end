@@ -1,7 +1,10 @@
-import { Op } from 'sequelize'
-import { User, Contact, Conversation, UserConversation } from '../../../sequelize/sequelize.models'
+import { Op, type WhereOptions } from 'sequelize'
+import { User, Contact, Device, ConversationDevice } from '../../../sequelize/sequelize.models'
 import { IUserCreation, IUserUpdate, IUser, IContact } from '../../types'
-import message_helper from '../messages/messages.helper'
+import { to_base64 } from '../../utils/binary'
+
+// What anyone allowed to see a user gets to know about them
+const PUBLIC_USER_ATTRIBUTES = ['User_id', 'User_name', 'identity_public_key']
 
 export default class user {
   static async create_one(user: IUserCreation) {
@@ -14,11 +17,10 @@ export default class user {
     }
   }
 
-  static async find_one_by_uuid(uuid: string) {
+  private static async find_one_with_lists(where: WhereOptions<IUser>, label: string) {
     try {
-      console.log('finding user with uuid', uuid)
       const userWithLists = await User.findOne({
-        where: { User_contact_uuid: uuid },
+        where,
         include: [
           {
             model: Contact,
@@ -27,7 +29,7 @@ export default class user {
             include: [{
               model: User,
               as: 'User',
-              attributes: ['User_name', 'encryption_public_key', 'signing_public_key', 'User_id']
+              attributes: PUBLIC_USER_ATTRIBUTES
             }]
           },
           {
@@ -37,84 +39,28 @@ export default class user {
             include: [{
               model: User,
               as: 'AddedBy',
-              attributes: ['User_name', 'encryption_public_key', 'signing_public_key', 'User_id']
+              attributes: PUBLIC_USER_ATTRIBUTES
             }]
           }]
       }) as IUser
       if (!userWithLists) throw new Error('User not found')
-      if (userWithLists.encryption_public_key && userWithLists.signing_public_key) {
-        userWithLists.encryption_public_key = message_helper.convert_buffer_to_uint8Array(userWithLists.encryption_public_key as Buffer)
-        userWithLists.signing_public_key = message_helper.convert_buffer_to_uint8Array(userWithLists.signing_public_key as Buffer)
-      }
-
-      userWithLists.contact_list?.forEach((contact: IContact) => {
-        if (!contact.User || !contact.User.encryption_public_key || !contact.User.signing_public_key) return
-        contact.User.encryption_public_key = message_helper.convert_buffer_to_uint8Array(contact.User.encryption_public_key as Buffer)
-        contact.User.signing_public_key = message_helper.convert_buffer_to_uint8Array(contact.User.signing_public_key as Buffer)
-      })
-      userWithLists.demands?.forEach((contact: IContact) => {
-        if (!contact.AddedBy || !contact.AddedBy.encryption_public_key || !contact.AddedBy.signing_public_key) return
-        contact.AddedBy.encryption_public_key = message_helper.convert_buffer_to_uint8Array(contact.AddedBy.encryption_public_key as Buffer)
-        contact.AddedBy.signing_public_key = message_helper.convert_buffer_to_uint8Array(contact.AddedBy.signing_public_key as Buffer)
-      })
-
       return userWithLists
     } catch (error) {
       const typedError = error as Error
-      throw new Error(`Unable to find user with uuid ${uuid} : ${typedError.message}`)
+      throw new Error(`Unable to find user with ${label} : ${typedError.message}`)
     }
   }
 
+  static async find_one_by_uuid(uuid: string) {
+    return this.find_one_with_lists({ User_contact_uuid: uuid }, `uuid ${uuid}`)
+  }
+
   static async find_one_by_id(id: number) {
-    try {
-      console.log('finding user with id', id)
-      const userWithLists = await User.findOne({
-        where: { User_id: id },
-        include: [
-          {
-            model: Contact,
-            as: 'contact_list',
-            required: false,
-            include: [{
-              model: User,
-              as: 'User',
-              attributes: ['User_name', 'encryption_public_key', 'signing_public_key', 'User_id']
-            }]
-          },
-          {
-            model: Contact,
-            as: 'demands',
-            required: false,
-            include: [{
-              model: User,
-              as: 'AddedBy',
-              attributes: ['User_name', 'encryption_public_key', 'signing_public_key', 'User_id']
-            }]
-          }]
-      }) as IUser
-      if (!userWithLists) throw new Error('User not found')
+    return this.find_one_with_lists({ User_id: id }, `id ${id}`)
+  }
 
-      if (userWithLists.encryption_public_key && userWithLists.signing_public_key) {
-        userWithLists.encryption_public_key = message_helper.convert_buffer_to_uint8Array(userWithLists.encryption_public_key as Buffer)
-        userWithLists.signing_public_key = message_helper.convert_buffer_to_uint8Array(userWithLists.signing_public_key as Buffer)
-      }
-      userWithLists.contact_list?.forEach((contact: IContact) => {
-        if (!contact.User || !contact.User.encryption_public_key || !contact.User.signing_public_key) return
-        contact.User.encryption_public_key = message_helper.convert_buffer_to_uint8Array(contact.User.encryption_public_key as Buffer)
-        contact.User.signing_public_key = message_helper.convert_buffer_to_uint8Array(contact.User.signing_public_key as Buffer)
-      })
-      userWithLists.demands?.forEach((contact: IContact) => {
-        if (!contact.AddedBy || !contact.AddedBy.encryption_public_key || !contact.AddedBy.signing_public_key) return
-        contact.AddedBy.encryption_public_key = message_helper.convert_buffer_to_uint8Array(contact.AddedBy.encryption_public_key as Buffer)
-        contact.AddedBy.signing_public_key = message_helper.convert_buffer_to_uint8Array(contact.AddedBy.signing_public_key as Buffer)
-      })
-
-      return userWithLists
-    } catch (error) {
-      const typedError = error as Error
-      console.error(typedError.message)
-      throw new Error(`Unable to find user with id ${id} : ${typedError.message}`)
-    }
+  static async find_public_by_id(id: number) {
+    return await User.findOne({ where: { User_id: id }, attributes: PUBLIC_USER_ATTRIBUTES })
   }
 
   // Only used to check a password at login: the result must never be sent to a client
@@ -129,11 +75,6 @@ export default class user {
       console.error(typedError.message)
       throw new Error('Unable to find user credentials')
     }
-  }
-
-  static async all_exist(ids: number[]) {
-    const count = await User.count({ where: { User_id: ids } })
-    return count === ids.length
   }
 
   static async check_if_email_is_used(email: string) {
@@ -159,7 +100,7 @@ export default class user {
         throw new Error('Invalid input')
       }
       // Only explicitly allowed fields can be changed here: email, password,
-      // contact uuid and public keys have their own dedicated flows.
+      // contact uuid and identity key have their own dedicated flows.
       const { User_name } = update
 
       await User.update(
@@ -176,36 +117,65 @@ export default class user {
     }
   }
 
-  static async update_public_keys(user_to_update: IUser, encryption_public_key: Uint8Array, signing_public_key: Uint8Array) {
-    try {
-      if (!user_to_update || !encryption_public_key || !signing_public_key) {
-        throw new Error('Invalid input')
+  static async set_identity_public_key(User_id: number, identity_public_key: Buffer) {
+    await User.update({ identity_public_key }, { where: { User_id } })
+    return this.find_one_by_id(User_id)
+  }
+
+  // A user can see another one if they are contacts (in any direction) or share a conversation
+  static async can_access(viewer_id: number, target_id: number) {
+    if (viewer_id === target_id) return true
+
+    const contact = await Contact.findOne({
+      where: {
+        [Op.or]: [
+          { User_id: viewer_id, Contact_User_id: target_id },
+          { User_id: target_id, Contact_User_id: viewer_id },
+        ]
       }
+    })
+    if (contact) return true
 
-      const buffered_encryption_public_key = message_helper.convert_object_to_buffer(encryption_public_key)
-      const buffered_signing_public_key = message_helper.convert_object_to_buffer(signing_public_key)
+    const viewer_memberships = await ConversationDevice.findAll({
+      attributes: ['Conversation_id'],
+      include: [{ model: Device, as: 'Device', where: { User_id: viewer_id }, attributes: [] }],
+    })
+    if (!viewer_memberships.length) return false
 
-      await User.update(
-        {
-          encryption_public_key: buffered_encryption_public_key,
-          signing_public_key: buffered_signing_public_key
-        },
-        { where: { User_id: user_to_update.User_id } }
-      )
+    const shared_membership = await ConversationDevice.findOne({
+      where: { Conversation_id: viewer_memberships.map(membership => membership.Conversation_id) },
+      include: [{ model: Device, as: 'Device', where: { User_id: target_id }, attributes: [] }],
+    })
+    return !!shared_membership
+  }
 
-      let updated_user = {} as IUser
-      await User.findOne({ where: { User_id: user_to_update.User_id } })
-        .then((response) => {
-          if (!response) throw new Error('Could not find user after update')
-          updated_user = response.dataValues as IUser
-        })
+  static serialize_public(this_user: IUser | undefined) {
+    if (!this_user) return undefined
+    return {
+      User_id: this_user.User_id,
+      User_name: this_user.User_name,
+      identity_public_key: to_base64(this_user.identity_public_key),
+    }
+  }
 
-      return this.find_one_by_id(updated_user.User_id)
-
-    } catch (error) {
-      const typedError = error as Error
-      console.error("Error updating user:", typedError.message)
-      throw new Error('Unable to update user')
+  // What a user gets to know about themselves
+  static serialize(this_user: IUser) {
+    return {
+      User_id: this_user.User_id,
+      User_name: this_user.User_name,
+      User_email: this_user.User_email,
+      User_contact_uuid: this_user.User_contact_uuid,
+      identity_public_key: to_base64(this_user.identity_public_key),
+      contact_list: this_user.contact_list?.map((contact: IContact) => ({
+        Contact_id: contact.Contact_id,
+        Contact_User_id: contact.Contact_User_id,
+        User: user.serialize_public(contact.User),
+      })) ?? [],
+      demands: this_user.demands?.map((contact: IContact) => ({
+        Contact_id: contact.Contact_id,
+        User_id: contact.User_id,
+        AddedBy: user.serialize_public(contact.AddedBy),
+      })) ?? [],
     }
   }
 }

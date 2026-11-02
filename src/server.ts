@@ -1,26 +1,23 @@
 import { env } from './utils/env'
 import express from 'express'
 import router from './router'
-import { User, Contact, Conversation, UserConversation, Message } from '../sequelize/sequelize.models'
+import { sequelize } from '../sequelize/sequelize.models'
 
 const app = express()
 
 const port = env.PORT
 
-app.use(express.json())
+// MLS commits carry welcomes and ratchet trees, which can exceed the 100kb default
+app.use(express.json({ limit: '1mb' }))
 
 // Initialize database (sync models without force)
 async function initDatabase() {
   try {
     console.log('🔍 Checking database structure...')
-    
-    // Sync all models without dropping tables (force: false)
-    await User.sync({ alter: false })
-    await Contact.sync({ alter: false })
-    await Conversation.sync({ alter: false })
-    await UserConversation.sync({ alter: false })
-    await Message.sync({ alter: false })
-    
+
+    // Create missing tables, in dependency order, without altering existing ones
+    await sequelize.sync()
+
     console.log('✅ Database ready')
   } catch (error) {
     console.error('❌ Database initialization error:', error)

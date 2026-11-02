@@ -26,7 +26,7 @@ export default class auth_controller {
 
       res.status(201)
       auth_helper.set_auth_cookie(res, auth_helper.generate_JWT(full_user))
-      res.json(full_user)
+      res.json(user.serialize(full_user))
 
     } catch (error) {
       const typedError = error as Error;
@@ -57,7 +57,7 @@ export default class auth_controller {
       const existing_user = await user.find_one_by_id(credentials.User_id)
       res.status(200)
       auth_helper.set_auth_cookie(res, auth_helper.generate_JWT(existing_user))
-      res.json(existing_user)
+      res.json(user.serialize(existing_user))
     } catch (error) {
       const typedError = error as Error;
       if (typedError.message === 'Wrong email or password') {
