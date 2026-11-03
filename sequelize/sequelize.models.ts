@@ -14,9 +14,14 @@ import {
 } from '../src/types'
 import { env } from '../src/utils/env'
 
+// Hosted Postgres (Neon on Vercel…) requires TLS and says so with sslmode in the connection string,
+// but Sequelize does not pass that parameter on to pg
+const database_requires_ssl = /[?&]sslmode=(require|verify-ca|verify-full)\b/.test(env.DATABASE_URL)
+
 const sequelize = new Sequelize(env.DATABASE_URL, {
   dialect: 'postgres',
   dialectModule: pg,
+  dialectOptions: database_requires_ssl ? { ssl: { rejectUnauthorized: true } } : {},
   // SQL logs are only useful while developing
   logging: env.NODE_ENV === 'production' ? false : console.log,
 })
