@@ -1,51 +1,45 @@
 {
-  "name": "cerberes",
+  "name": "cerberes-back-end",
   "version": "1.0.0",
-  "description": "",
+  "description": "Delivery service of Cerberes, an end-to-end encrypted chat based on MLS",
+  "private": true,
+  "packageManager": "pnpm@10.28.0",
   "main": "dist/src/server.js",
   "scripts": {
     "start": "node dist/src/server.js",
-    "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "nodemon src/server.ts",
-    "lint": "eslint --ext .ts --fix",
+    "lint": "eslint --ext .ts src sequelize",
+    "typecheck": "tsc --noEmit",
     "build": "tsc",
     "vercel-build": "pnpm build"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
   "dependencies": {
-    "@types/bcryptjs": "^2.4.6",
-    "@types/cookie-parser": "^1.4.3",
-    "@types/cors": "^2.8.13",
-    "@types/jsonwebtoken": "^9.0.2",
-    "@types/pg": "^8.11.11",
     "bcryptjs": "^3.0.2",
     "cookie-parser": "^1.4.6",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
     "jsonwebtoken": "^9.0.1",
-    "nodemon": "^3.0.1",
     "passport": "^0.6.0",
     "passport-jwt": "^4.0.1",
     "pg": "^8.14.1",
-    "sequelize": "^6.32.1",
-    "ts-node": "^10.9.1"
+    "sequelize": "^6.32.1"
   },
   "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/cookie-parser": "^1.4.3",
+    "@types/cors": "^2.8.13",
     "@types/express": "^4.17.21",
+    "@types/jsonwebtoken": "^9.0.2",
     "@types/node": "^20.4.5",
     "@types/passport": "^1.0.12",
     "@types/passport-jwt": "^3.0.9",
+    "@types/pg": "^8.11.11",
     "@typescript-eslint/eslint-plugin": "^6.2.1",
     "@typescript-eslint/parser": "^6.2.1",
     "eslint": "^8.46.0",
+    "nodemon": "^3.0.1",
+    "ts-node": "^10.9.1",
     "typescript": "^5.1.6"
-  },
-  "pnpm": {
-    "ignoredBuiltDependencies": [
-      "bcrypt"
-    ]
   }
 }

@@ -1,99 +1,62 @@
 # Cerberes Back End
 
-## Description
+Cerberes is an end-to-end encrypted chat where users own their keys. Messages are encrypted with
+[MLS (RFC 9420)](https://www.rfc-editor.org/rfc/rfc9420) on the users' devices: this server never sees plaintext
+nor any private key. It is the MLS **delivery service**:
 
-Cerberes is a secure, encrypted chat application. It uses PGP encryption to ensure the privacy of user communications. The messages transit through a server and are then deleted from the server once they've been delivered and decrypted by the recipient. 
+- it stores accounts, contacts and the public part of identities and devices,
+- it hands out key packages so that devices can be added to groups,
+- it orders commits (one per epoch) and relays encrypted messages to each device,
+- it deletes a message as soon as every recipient device fetched it.
 
-## Features
+Users keep a 12 word recovery phrase from which their identity key is derived. It certifies each of their
+devices, and contacts can compare safety numbers to make sure the server did not swap keys.
+See [PROTOCOL.md](PROTOCOL.md) for the protocol and the API contract.
 
-- PGP encryption for secure messages.
-- Messages are deleted from the server once delivered.
-- Users can generate and retrieve PGP keys using a mnemonic phrase.
+The web client lives in [cerberes_front_end](https://github.com/SebastienPingal/cerberes_front_end).
 
-## Tech Stack
+## Tech stack
 
-- TypeScript
-- Node.js
-- Express.js
-- Sequelize (ORM)
-- PostgreSQL
+TypeScript, Node.js, Express, Sequelize, PostgreSQL. Deployed on Vercel.
 
-## 🐳 Running with Docker
+## Configuration
 
-The easiest way to run the application is using Docker Compose:
+Copy `.env.example` to `.env`:
+
+| Variable | Required | Description |
+| --- | --- | --- |
+| `DATABASE_URL` | yes | PostgreSQL connection string |
+| `JWT_SECRET` | yes | Secret signing session tokens, e.g. `openssl rand -base64 48`. The server refuses to start without it |
+| `CORS_ORIGINS` | yes | Comma separated origins of the front-end, e.g. `http://localhost:3333`. Empty means no origin is allowed |
+| `COOKIE_DOMAIN` | no | Domain of the session cookie, e.g. `.yourdomain.com` to share it across subdomains |
+| `PORT` | no | Port in development, `3000` by default |
+| `NODE_ENV` | no | `production` on Vercel |
+
+Tables are created at startup when they don't exist. There are no migrations yet: a schema change means
+recreating the database.
+
+## Running locally
+
+With Docker (the API is then on port 8000, PostgreSQL on 5436):
 
 ```bash
-# Build and start the containers
-docker-compose up -d
-
-# View logs
-docker-compose logs -f
-
-# Stop the containers
-docker-compose down
+docker compose up -d
 ```
 
-This will start both the application and PostgreSQL database with all the necessary environment variables configured.
-
-## 🚀 Running Locally
-
-If you prefer to run the application locally:
-
-1. Make sure you have PostgreSQL installed and running
-2. Copy `.env.example` to `.env` and update the values if needed
-3. Install dependencies:
-   ```bash
-   pnpm install
-   ```
-4. Start the development server:
-   ```bash
-   pnpm dev
-   ```
-
-## 📦 Build for Production
+Or with a local PostgreSQL:
 
 ```bash
+pnpm install
+pnpm dev
+```
+
+## Checks
+
+```bash
+pnpm lint
+pnpm typecheck
 pnpm build
-pnpm start
 ```
 
-## ☁️ AWS Deployment with Terraform
-
-This project can be automatically deployed to AWS using our CI/CD pipeline and Terraform. 
-
-### Prerequisites
-
-- AWS account with appropriate permissions
-- GitHub repository with GitHub Actions enabled
-- Required GitHub Secrets configured (see below)
-
-### Deployment Process
-
-1. Push your changes to the master branch
-2. The CI pipeline checks code quality and builds the application
-3. The CD pipeline provisions AWS infrastructure using Terraform
-4. Application is deployed to an EC2 instance with a PostgreSQL RDS
-
-### Required GitHub Secrets
-
-- `AWS_ACCESS_KEY_ID`: Your AWS access key
-- `AWS_SECRET_ACCESS_KEY`: Your AWS secret key
-- `AWS_REGION`: AWS region for deployment (e.g., us-east-1)
-- `DB_USERNAME`: Database username
-- `DB_PASSWORD`: Database password
-- `SSH_KEY_NAME`: Name of the SSH key pair in AWS
-- `EC2_SSH_PRIVATE_KEY`: Private SSH key content for connecting to EC2
-
-For more details, see the [Terraform README](terraform/README.md).
-
-## Usage
-
-Provide information about how to use your app. You may want to include API routes here.
-
-## Contributing
-
-Please read `CONTRIBUTING.md` for details on our code of conduct, and the process for submitting pull requests to us.
-
-## License
-
-This project is licensed under the MIT License - see the `LICENSE.md` file for details.
+The end-to-end scenario, which drives the web client in several browsers against this server, is in the front-end
+repository (`e2e/`).

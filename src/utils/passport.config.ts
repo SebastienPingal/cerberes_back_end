@@ -5,7 +5,7 @@ import { Request } from 'express'
 import { env } from './env'
 
 const cookieExtractor = function(req : Request) {
-    var token = null;
+    let token = null;
     if (req && req.cookies) {
       token = req.cookies['token'];
     }

@@ -17,6 +17,8 @@ import { env } from '../src/utils/env'
 const sequelize = new Sequelize(env.DATABASE_URL, {
   dialect: 'postgres',
   dialectModule: pg,
+  // SQL logs are only useful while developing
+  logging: env.NODE_ENV === 'production' ? false : console.log,
 })
 
 class User extends Model<IUser, IUserCreation> implements IUser {

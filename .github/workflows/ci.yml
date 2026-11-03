@@ -1,96 +1,36 @@
-name: CI Pipeline
+name: CI
 
 on:
-    push:
-        branches: [ master ]
-    pull_request:
-        branches: [ master ]
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
 
 jobs:
-    lint_typecheck:
-        runs-on: ubuntu-latest
-        steps:
-            - name: Checkout code
-              uses: actions/checkout@v3
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-            - name: Setup pnpm
-              uses: pnpm/action-setup@v2
-              with:
-                  version: 8.6.0
+      # Uses the pnpm version of "packageManager" in package.json
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
 
-            - name: Setup Node.js
-              uses: actions/setup-node@v3
-              with:
-                  node-version: 18
-                  cache: 'pnpm'
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
 
-            - name: Install dependencies
-              run: pnpm install
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
 
-            - name: Run lint
-              run: pnpm lint
+      - name: Lint
+        run: pnpm lint
 
-    test:
-        runs-on: ubuntu-latest
-        needs: lint_typecheck
-        steps:
-            - name: Checkout code
-              uses: actions/checkout@v3
+      - name: Typecheck
+        run: pnpm typecheck
 
-            - name: Setup pnpm
-              uses: pnpm/action-setup@v2
-              with:
-                  version: 8.6.0
-
-            - name: Setup Node.js
-              uses: actions/setup-node@v3
-              with:
-                  node-version: 18
-                  cache: 'pnpm'
-
-            - name: Install dependencies
-              run: pnpm install
-
-            - name: Run tests
-              run: pnpm test || echo "📋 No tests defined yet" # Allow pipeline to continue if no tests defined
-
-    build:
-        runs-on: ubuntu-latest
-        needs: [lint_typecheck, test]
-        steps:
-            - name: Checkout code
-              uses: actions/checkout@v3
-
-            - name: Setup pnpm
-              uses: pnpm/action-setup@v2
-              with:
-                  version: 8.6.0
-
-            - name: Setup Node.js
-              uses: actions/setup-node@v3
-              with:
-                  node-version: 18
-                  cache: 'pnpm'
-
-            - name: Install dependencies
-              run: pnpm install
-
-            - name: Build application
-              run: pnpm build
-
-            - name: Prepare for production
-              run: |
-                  # Prune development dependencies to keep only production dependencies
-                  echo "📦 Pruning dependencies for production..."
-                  pnpm prune --prod
-
-            - name: Upload build artifact
-              uses: actions/upload-artifact@v4
-              with:
-                  name: build-artifact
-                  path: |
-                      dist/
-                      node_modules/
-                      package.json
-                      pnpm-lock.yaml
-                  retention-days: 1
+      - name: Build
+        run: pnpm build
