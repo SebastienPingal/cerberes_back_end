@@ -1,4 +1,6 @@
 import { sequelize, Conversation, ConversationDevice, Device, Message, Delivery } from '../../../sequelize/sequelize.models'
+import type { Transaction } from 'sequelize'
+import type { IMessage } from '../../types'
 import { to_base64 } from '../../utils/binary'
 import { http_error } from '../../utils/http_error'
 
@@ -25,6 +27,18 @@ export interface IApplicationMessageInput {
 }
 
 export default class message_model {
+  // Store a message with one delivery per recipient. A message nobody has to fetch (a commit or a
+  // message in a group where the sender is alone) is not kept: it would never be acknowledged.
+  private static async store_for_recipients(fields: IMessage, recipient_ids: string[], transaction: Transaction) {
+    const new_message = await Message.create(fields, { transaction })
+    if (recipient_ids.length) {
+      await Delivery.bulkCreate(recipient_ids.map(Device_id => ({ Message_id: new_message.Message_id, Device_id })), { transaction })
+    } else {
+      await new_message.destroy({ transaction })
+    }
+    return new_message
+  }
+
   // The server is the MLS delivery service: it orders commits by accepting only one per epoch.
   // A commit created for an older epoch is refused, its author must process the inbox and retry.
   static async accept_commit(input: ICommitInput): Promise<number> {
@@ -45,17 +59,14 @@ export default class message_model {
       const added_devices = await Device.count({ where: { Device_id: added_ids }, transaction })
       if (added_devices !== added_ids.length) throw new http_error(400, 'Unknown added device')
 
-      const commit_message = await Message.create({
+      // Every current member except the committer processes the commit, removed ones included
+      await message_model.store_for_recipients({
         Conversation_id: input.Conversation_id,
         Sender_device_id: input.Sender_device_id,
         kind: 'commit',
         epoch: input.epoch,
         payload: input.commit,
-      }, { transaction })
-      // Every current member except the committer processes the commit, removed ones included
-      await Delivery.bulkCreate(member_ids
-        .filter(id => id !== input.Sender_device_id)
-        .map(Device_id => ({ Message_id: commit_message.Message_id, Device_id })), { transaction })
+      }, member_ids.filter(id => id !== input.Sender_device_id), transaction)
 
       if (input.removed.length) {
         await ConversationDevice.destroy({ where: { Conversation_id: input.Conversation_id, Device_id: input.removed }, transaction })
@@ -97,18 +108,13 @@ export default class message_model {
       if (!member_ids.includes(input.Sender_device_id)) throw new http_error(403, 'Device not in conversation')
       if (this_conversation.epoch !== input.epoch) throw new http_error(409, 'Epoch is outdated, process the inbox and retry')
 
-      const new_message = await Message.create({
+      return await message_model.store_for_recipients({
         Conversation_id: input.Conversation_id,
         Sender_device_id: input.Sender_device_id,
         kind: 'application',
         epoch: input.epoch,
         payload: input.message,
-      }, { transaction })
-      await Delivery.bulkCreate(member_ids
-        .filter(id => id !== input.Sender_device_id)
-        .map(Device_id => ({ Message_id: new_message.Message_id, Device_id })), { transaction })
-
-      return new_message
+      }, member_ids.filter(id => id !== input.Sender_device_id), transaction)
     })
   }
 

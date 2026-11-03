@@ -8,15 +8,8 @@ import conversations_routes from './entities/conversations/conversations.router'
 import inbox_routes from './entities/inbox/inbox.router'
 import my_passport from './utils/passport.config'
 import cookieParser from 'cookie-parser'
-import cors from 'cors'
-import { env } from './utils/env'
 
 const router = Router()
-
-router.use(cors({
-  origin: env.CORS_ORIGINS,
-  credentials: true
-}))
 
 const authenticated = [cookieParser(), my_passport.authenticate('jwt', { session: false })]
 
